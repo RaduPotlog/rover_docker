@@ -98,6 +98,8 @@ RUN cmake ..
 RUN make
 RUN make install
 
+RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib" >> /root/.bashrc
+
 WORKDIR /root/ros2_ws/rover_a1
 ENV ROVER_ROS_BUILD_TYPE=hardware
 RUN source /root/.bashrc
