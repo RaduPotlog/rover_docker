@@ -54,6 +54,11 @@ RUN apt-get update && apt-get install -y \
     ros-jazzy-desktop \
     && rm -rf /var/lib/apt/lists/*
 
+RUN apt-get update && apt-get install -y \
+    ros-jazzy-ament-cmake \
+    python3-colcon-common-extensions \
+    && rm -rf /var/lib/apt/lists/*
+
 # Source ROS 2 in bashrc
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
 RUN source /opt/ros/jazzy/setup.bash
@@ -93,10 +98,18 @@ RUN cmake ..
 RUN make
 RUN make install
 
-WORKDIR /root/ros2_ws/rover_a1/
-RUN colcon build --symlink-install --packages-up-to rover_metapackage --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+WORKDIR /root/ros2_ws/rover_a1
+ENV ROVER_ROS_BUILD_TYPE=hardware
+RUN source /root/.bashrc
+RUN source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to rover_metapackage --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 RUN echo "source /root/ros2_ws/rover_a1/install/setup.bash" >> /root/.bashrc
 RUN source /root/ros2_ws/rover_a1/install/setup.bash
+
+WORKDIR /root
+
+RUN apt-get update
+RUN apt-get upgrade
+RUN apt-get install net-tools
 
 WORKDIR /root
 
