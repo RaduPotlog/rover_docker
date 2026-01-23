@@ -75,6 +75,8 @@ RUN apt-get install -y usbutils
 RUN apt-get install -y plocate
 RUN rosdep init
 ENV ROS_DISTRO=jazzy
+ENV ROVER_ROS_BUILD_TYPE=hardware
+RUN source /root/.bashrc
 RUN rosdep update --rosdistro jazzy
 RUN rosdep install --from-paths src -y -i
 
