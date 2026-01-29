@@ -1,0 +1,13 @@
+version: '2.1'
+
+services:
+  rovera1-app:
+    build: .                                  # Builds from your Dockerfile
+    privileged: true                          # Required for /dev access
+    restart: always
+
+    cap_add:
+      - SYS_RAWIO               # Raw hardware access
+
+    # Optional: ROS2 networking
+    network_mode: host
