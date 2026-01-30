@@ -120,5 +120,10 @@ RUN apt-get install net-tools
 WORKDIR /root
 
 # Start SSH daemon directly (no systemd needed)
-CMD ["/usr/sbin/sshd", "-D"]
+COPY start.sh /usr/local/bin/start.sh
+RUN chmod +x /usr/local/bin/start.sh
+CMD ["/usr/local/bin/start.sh"]
+
+#CMD ["/usr/sbin/sshd && source /opt/ros/jazzy/setup.bash && source /root/ros2_ws/rover_a1/src/rover_ros/install/setup.bash && ros2 launch foxglove_bridge foxglove_bridge_launch.xml", "-D"]
+
 #CMD ["/bin/bash"]
