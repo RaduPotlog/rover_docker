@@ -2,7 +2,7 @@
 set -x  # Debug logging for Balena
 
 # SSHD background (keep alive)
- /usr/sbin/sshd -D &
+/usr/sbin/sshd -D &
 SSHD_PID=$!
 
 # Source ROS2 + workspace
