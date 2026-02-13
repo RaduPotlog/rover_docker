@@ -64,6 +64,7 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
 RUN source /opt/ros/jazzy/setup.bash
 
 ####################################### Install ROVER Firmware ##########################
+RUN apt-get update
 RUN apt-get install -y libyaml-cpp-dev
 RUN apt-get install -y libpcap-dev
 
