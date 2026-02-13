@@ -64,13 +64,16 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
 RUN source /opt/ros/jazzy/setup.bash
 
 ####################################### Install ROVER Firmware ##########################
+RUN apt-get install -y libyaml-cpp-dev
+RUN apt-get install -y libpcap-dev
+
 RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 RUN git clone -b main https://github.com/RaduPotlog/rover_ros.git src/rover_ros
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
 RUN vcs import src < src/rover_ros/rover_metapackage/hardware_deps.repos
 RUN apt-get update
-RUN apt-get upgrade
+RUN apt-get upgrade -y
 RUN apt-get install -y usbutils
 RUN apt-get install -y plocate
 RUN rosdep init
@@ -98,6 +101,16 @@ RUN mkdir build
 WORKDIR /root/ros2_ws/rover_a1/src/rover_cpplinux_serial/build
 RUN cmake ..
 RUN make
+RUN make install
+
+RUN apt-get update
+RUN apt-get install libzmq3-dev
+RUN apt-get install sqlite3
+WORKDIR /root/ros2_ws/rover_a1/src/rover_behavior_tree
+RUN mkdir build_release
+RUN cmake -S . -B build_release
+RUN cmake --build build_release
+WORKDIR /root/ros2_ws/rover_a1/src/rover_behavior_tree/build_release
 RUN make install
 
 RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib" >> /root/.bashrc
