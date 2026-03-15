@@ -61,6 +61,8 @@ RUN apt-get update && apt-get install -y \
 
 # Source ROS 2 in bashrc
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
+RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
+RUN echo "export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5" >> /root/.bashrc
 RUN source /opt/ros/jazzy/setup.bash
 
 ####################################### Install ROVER Firmware ##########################
@@ -135,7 +137,3 @@ WORKDIR /root
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 CMD ["/usr/local/bin/start.sh"]
-
-#CMD ["/usr/sbin/sshd && source /opt/ros/jazzy/setup.bash && source /root/ros2_ws/rover_a1/src/rover_ros/install/setup.bash && ros2 launch foxglove_bridge foxglove_bridge_launch.xml", "-D"]
-
-#CMD ["/bin/bash"]
