@@ -56,5 +56,15 @@ if ! kill -0 $ZENOHD_PID 2>/dev/null; then
   exit 1
 fi
 
+# **Rover Bringup - Background**
+# Starts the rover nodes and redirects output so it doesn't pollute the container logs.
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
+ROVER_PID=$!
+echo "Rover bringup started in background (PID: $ROVER_PID)"
+
+# Optional short delay to let rover nodes initialize before foxglove connects
+sleep 2
+
 # **FOREGROUND** foxglove_bridge as PID 1
 exec ros2 launch foxglove_bridge foxglove_bridge_launch.xml
