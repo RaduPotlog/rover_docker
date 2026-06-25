@@ -72,7 +72,7 @@ RUN apt-get install -y libpcap-dev
 
 RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
-RUN git clone -b main https://github.com/RaduPotlog/rover_ros.git src/rover_ros
+RUN git clone -b jazzy https://github.com/RaduPotlog/rover_ros.git src/rover_ros
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
 RUN vcs import src < src/rover_ros/rover_metapackage/hardware_deps.repos
 RUN apt-get update
