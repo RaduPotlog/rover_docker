@@ -98,13 +98,6 @@ RUN cmake -Bbuild .
 RUN cmake --build build
 WORKDIR /root/ros2_ws/rover_a1/src/rover_modbus/build
 RUN make install
- 
-WORKDIR /root/ros2_ws/rover_a1/src/rover_cpplinux_serial
-RUN mkdir build
-WORKDIR /root/ros2_ws/rover_a1/src/rover_cpplinux_serial/build
-RUN cmake ..
-RUN make
-RUN make install
 
 RUN apt-get update
 RUN apt-get install libzmq3-dev
