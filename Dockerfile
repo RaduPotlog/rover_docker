@@ -124,6 +124,12 @@ RUN apt-get update
 RUN apt-get upgrade
 RUN apt-get install net-tools
 
+# Install Phidgets admin and network server
+RUN curl -fsSL https://www.phidgets.com/downloads/setup_linux | bash
+RUN apt-get update
+RUN apt-get -y install libphidget22 libphidget22-dev libphidget22extra
+RUN apt-get -y install phidget22admin phidget22networkserver phidget22wwwjs
+
 WORKDIR /root
 
 # Start SSH daemon directly (no systemd needed)
