@@ -1,26 +1,15 @@
-version: '2.1'
+version: '2.4'
 
 services:
   rovera1-app:
-    build: .
+    build:
+      context: .
     privileged: true
     restart: always
     cap_add:
       - SYS_RAWIO
     network_mode: host
     labels:
-      io.balena.features.dbus: 'true'         
-      io.balena.features.balena-socket: 'true'
-      io.balena.features.sysfs: 'true'
-
-  phidget-server:
-    build: ./phidgets_server
-    privileged: true
-    restart: always
-    network_mode: host
-    environment:
-      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
-    labels:
-      io.balena.features.dbus: 'true'         
+      io.balena.features.dbus: 'true'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'

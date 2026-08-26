@@ -58,10 +58,10 @@ fi
 
 # **Rover Bringup - Background**
 # Starts the rover nodes and redirects output so it doesn't pollute the container logs.
-#export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-#nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
-#ROVER_PID=$!
-#echo "Rover bringup started in background (PID: $ROVER_PID)"
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
+ROVER_PID=$!
+echo "Rover bringup started in background (PID: $ROVER_PID)"
 
 # Optional short delay to let rover nodes initialize before foxglove connects
 sleep 2
