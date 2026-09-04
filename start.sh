@@ -1,9 +1,24 @@
 #!/bin/bash -e
 set -x  # Debug logging for Balena
 
+# All long-running processes we supervise. Populated as each is started.
+CHILD_PIDS=()
+
+terminate_children() {
+  if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
+    kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
+    wait "${CHILD_PIDS[@]}" 2>/dev/null || true
+  fi
+}
+
+# Forward container stop/kill signals to every supervised process instead
+# of only whichever one happens to be PID 1.
+trap 'terminate_children; exit 0' TERM INT
+
 # SSHD background (keep alive)
 /usr/sbin/sshd -D &
 SSHD_PID=$!
+CHILD_PIDS+=("$SSHD_PID")
 
 # Source ROS2 + workspace
 source /opt/ros/jazzy/setup.bash
@@ -42,10 +57,10 @@ export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5
 pkill -f ros2_daemon || true
 sleep 1
 
-# Start Zenoh Router in background with nohup + disown
+# Start Zenoh Router in background
 nohup ros2 run rmw_zenoh_cpp rmw_zenohd > /tmp/zenohd.log 2>&1 < /dev/null &
 ZENOHD_PID=$!
-disown -r  # Prevent SIGHUP from killing it
+CHILD_PIDS+=("$ZENOHD_PID")
 
 echo "Zenoh router started (PID: $ZENOHD_PID)"
 
@@ -61,10 +76,34 @@ fi
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
 ROVER_PID=$!
+CHILD_PIDS+=("$ROVER_PID")
 echo "Rover bringup started in background (PID: $ROVER_PID)"
 
 # Optional short delay to let rover nodes initialize before foxglove connects
 sleep 2
 
-# **FOREGROUND** foxglove_bridge as PID 1
-exec ros2 launch foxglove_bridge foxglove_bridge_launch.xml
+# foxglove_bridge is supervised like everything else (not exec'd as PID 1),
+# so a crash here is detected the same way as a crash in any other process.
+nohup ros2 launch foxglove_bridge foxglove_bridge_launch.xml > /tmp/foxglove_bridge.log 2>&1 < /dev/null &
+FOXGLOVE_PID=$!
+CHILD_PIDS+=("$FOXGLOVE_PID")
+echo "foxglove_bridge started (PID: $FOXGLOVE_PID)"
+
+# **Supervise** - block until the first of the supervised processes exits
+# (crash or otherwise). Rather than let the container keep running with a
+# dead component nobody notices, tear down everything else and exit so
+# docker-compose's `restart: always` (Balena) brings the whole stack back
+# up cleanly.
+wait -n "${CHILD_PIDS[@]}"
+EXIT_CODE=$?
+
+for entry in "sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "rover_bringup:$ROVER_PID" "foxglove_bridge:$FOXGLOVE_PID"; do
+  name=${entry%%:*}
+  pid=${entry##*:}
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+  fi
+done
+
+terminate_children
+exit "$EXIT_CODE"
