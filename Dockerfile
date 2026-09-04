@@ -63,7 +63,6 @@ RUN apt-get update && apt-get install -y \
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
 RUN echo "export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5" >> /root/.bashrc
-RUN source /opt/ros/jazzy/setup.bash
 
 ####################################### Install ROVER Firmware ##########################
 RUN apt-get update
@@ -86,7 +85,6 @@ RUN apt-get update && apt-get upgrade -y \
 RUN rosdep init
 ENV ROS_DISTRO=jazzy
 ENV ROVER_ROS_BUILD_TYPE=hardware
-RUN source /root/.bashrc
 RUN rosdep update --rosdistro jazzy
 RUN rosdep install --from-paths src -y -i
 
@@ -116,10 +114,8 @@ RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib" >> /root/.bash
 
 WORKDIR /root/ros2_ws/rover_a1
 ENV ROVER_ROS_BUILD_TYPE=hardware
-RUN source /root/.bashrc
 RUN source /opt/ros/jazzy/setup.bash && colcon build --symlink-install --packages-up-to rover_metapackage --cmake-args -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 RUN echo "source /root/ros2_ws/rover_a1/install/setup.bash" >> /root/.bashrc
-RUN source /root/ros2_ws/rover_a1/install/setup.bash
 
 WORKDIR /root
 
