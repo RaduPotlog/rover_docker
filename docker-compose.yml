@@ -6,8 +6,6 @@ services:
       context: .
     privileged: true
     restart: always
-    cap_add:
-      - SYS_RAWIO
     network_mode: host
     labels:
       io.balena.features.dbus: 'true'

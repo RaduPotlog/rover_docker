@@ -23,9 +23,9 @@ RUN echo 'root:root' | chpasswd \
 EXPOSE 22
 
 RUN add-apt-repository universe
-RUN apt-get update
-RUN apt-get install alsa-topology-conf
-RUN apt-mark hold alsa-topology-conf
+RUN apt-get update && apt-get install -y alsa-topology-conf \
+    && apt-mark hold alsa-topology-conf \
+    && rm -rf /var/lib/apt/lists/*
 
 ##################################### ROS2 install #######################################
 
@@ -75,10 +75,9 @@ WORKDIR /root/ros2_ws/rover_a1
 RUN git clone -b jazzy https://github.com/RaduPotlog/rover_ros.git src/rover_ros
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
 RUN vcs import src < src/rover_ros/rover_metapackage/hardware_deps.repos
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN apt-get install -y usbutils
-RUN apt-get install -y plocate
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y usbutils plocate \
+    && rm -rf /var/lib/apt/lists/*
 RUN rosdep init
 ENV ROS_DISTRO=jazzy
 ENV ROVER_ROS_BUILD_TYPE=hardware
@@ -99,9 +98,8 @@ RUN cmake --build build
 WORKDIR /root/ros2_ws/rover_a1/src/rover_modbus/build
 RUN make install
 
-RUN apt-get update
-RUN apt-get install libzmq3-dev
-RUN apt-get install sqlite3
+RUN apt-get update && apt-get install -y libzmq3-dev sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /root/ros2_ws/rover_a1/src/rover_behavior_tree
 RUN mkdir build_release
 RUN cmake -S . -B build_release
@@ -120,9 +118,9 @@ RUN source /root/ros2_ws/rover_a1/install/setup.bash
 
 WORKDIR /root
 
-RUN apt-get update
-RUN apt-get upgrade
-RUN apt-get install net-tools
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y net-tools \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Phidgets admin and network server
 RUN curl -fsSL https://www.phidgets.com/downloads/setup_linux | bash
