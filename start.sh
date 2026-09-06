@@ -86,8 +86,15 @@ else
   echo "Rover bringup disabled (START_ROVER_BRINGUP=false); skipping"
 fi
 
-# Optional short delay to let rover nodes initialize before foxglove connects
+# Optional short delay to let rover nodes initialize before the bridges connect
 sleep 2
+
+# rosbridge (websocket + rosapi) - required for ros-mcp-server to introspect
+# and control the ROS graph. Supervised like everything else below.
+nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml > /tmp/rosbridge.log 2>&1 < /dev/null &
+ROSBRIDGE_PID=$!
+CHILD_PIDS+=("$ROSBRIDGE_PID")
+echo "rosbridge started (PID: $ROSBRIDGE_PID)"
 
 # foxglove_bridge is supervised like everything else (not exec'd as PID 1),
 # so a crash here is detected the same way as a crash in any other process.
@@ -104,7 +111,7 @@ echo "foxglove_bridge started (PID: $FOXGLOVE_PID)"
 wait -n "${CHILD_PIDS[@]}"
 EXIT_CODE=$?
 
-STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "foxglove_bridge:$FOXGLOVE_PID")
+STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "rosbridge:$ROSBRIDGE_PID" "foxglove_bridge:$FOXGLOVE_PID")
 if [ "$START_ROVER_BRINGUP" = true ]; then
   STATUS_ENTRIES+=("rover_bringup:$ROVER_PID")
 fi

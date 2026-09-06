@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../src/rover_ros"
+		},
+		{
+			"path": "../../husarion_ugv_ros"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}

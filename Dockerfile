@@ -18,6 +18,19 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 
 RUN npm install -g @anthropic-ai/claude-code
 
+##################################### ros-mcp-server #########################
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Bake the package into the image at build time (no PyPI fetch needed at
+# runtime on the robot).
+RUN uv tool install ros-mcp
+
+# Register with Claude Code, scoped to the user so it's available no
+# matter which directory `claude` is started from over SSH.
+RUN claude mcp add ros-mcp --scope user -- ros-mcp --transport=stdio
+
 RUN apt-get update && apt-get install -y openssh-server \
     && mkdir /var/run/sshd \
     && rm -rf /var/lib/apt/lists/*
@@ -67,10 +80,17 @@ RUN apt-get update && apt-get install -y \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
+# rosbridge (websocket + rosapi) — required by ros-mcp-server for ROS
+# introspection/control; the full suite pulls in rosapi as a dependency.
+RUN apt-get update && apt-get install -y \
+    ros-jazzy-rosbridge-suite \
+    && rm -rf /var/lib/apt/lists/*
+
 # Source ROS 2 in bashrc
 RUN echo "source /opt/ros/jazzy/setup.bash" >> /root/.bashrc
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
 RUN echo "export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5" >> /root/.bashrc
+RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 
 ####################################### Install ROVER Firmware ##########################
 RUN apt-get update
