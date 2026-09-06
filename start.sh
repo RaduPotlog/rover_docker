@@ -4,6 +4,9 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
+# Toggle whether the rover_bringup launch is started at all.
+START_ROVER_BRINGUP=true
+
 terminate_children() {
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -74,10 +77,14 @@ fi
 # **Rover Bringup - Background**
 # Starts the rover nodes and redirects output so it doesn't pollute the container logs.
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
-ROVER_PID=$!
-CHILD_PIDS+=("$ROVER_PID")
-echo "Rover bringup started in background (PID: $ROVER_PID)"
+if [ "$START_ROVER_BRINGUP" = true ]; then
+  nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
+  ROVER_PID=$!
+  CHILD_PIDS+=("$ROVER_PID")
+  echo "Rover bringup started in background (PID: $ROVER_PID)"
+else
+  echo "Rover bringup disabled (START_ROVER_BRINGUP=false); skipping"
+fi
 
 # Optional short delay to let rover nodes initialize before foxglove connects
 sleep 2
@@ -97,7 +104,12 @@ echo "foxglove_bridge started (PID: $FOXGLOVE_PID)"
 wait -n "${CHILD_PIDS[@]}"
 EXIT_CODE=$?
 
-for entry in "sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "rover_bringup:$ROVER_PID" "foxglove_bridge:$FOXGLOVE_PID"; do
+STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "foxglove_bridge:$FOXGLOVE_PID")
+if [ "$START_ROVER_BRINGUP" = true ]; then
+  STATUS_ENTRIES+=("rover_bringup:$ROVER_PID")
+fi
+
+for entry in "${STATUS_ENTRIES[@]}"; do
   name=${entry%%:*}
   pid=${entry##*:}
   if ! kill -0 "$pid" 2>/dev/null; then
