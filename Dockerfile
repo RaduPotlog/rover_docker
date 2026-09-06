@@ -9,6 +9,14 @@ RUN apt-get update && apt-get install -y \
     build-essential git nano htop \
     && rm -rf /var/lib/apt/lists/*
 
+##################################### Claude Code CLI #######################################
+
+# Install Node.js (LTS) via NodeSource, then the Claude Code CLI
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @anthropic-ai/claude-code
 
 RUN apt-get update && apt-get install -y openssh-server \
     && mkdir /var/run/sshd \
@@ -74,7 +82,7 @@ WORKDIR /root/ros2_ws/rover_a1
 
 # Pin to a specific commit for reproducible builds; bump with
 # `--build-arg ROVER_ROS_REF=<sha>` when a newer revision is wanted.
-ARG ROVER_ROS_REF=fc4ba7b6304d2e4bf95c093e540abdae50bb8817
+ARG ROVER_ROS_REF=39ce22e2118dd3ad5432222674962e7a3aa4522b
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
