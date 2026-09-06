@@ -100,9 +100,10 @@ RUN apt-get install -y libpcap-dev
 RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
-# Pin to a specific commit for reproducible builds; bump with
-# `--build-arg ROVER_ROS_REF=<sha>` when a newer revision is wanted.
-ARG ROVER_ROS_REF=39ce22e2118dd3ad5432222674962e7a3aa4522b
+# Tracks the tip of the `jazzy` branch by default, so every `--nocache`
+# build (see README) picks up the latest commit; pin to a specific SHA with
+# `--build-arg ROVER_ROS_REF=<sha>` for a reproducible build instead.
+ARG ROVER_ROS_REF=jazzy
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
