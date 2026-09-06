@@ -5,7 +5,7 @@ set -x  # Debug logging for Balena
 CHILD_PIDS=()
 
 # Toggle whether the rover_bringup launch is started at all.
-START_ROVER_BRINGUP=true
+START_ROVER_BRINGUP=false
 
 terminate_children() {
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
