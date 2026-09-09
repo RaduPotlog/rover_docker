@@ -11,3 +11,12 @@ services:
       io.balena.features.dbus: 'true'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
+  rover-web-server:
+    build:
+      context: ./rover_web_server
+    restart: always
+    network_mode: host
+    environment:
+      ROVER_WEB_PORT: '8080'
+      ROVER_WEB_POLL_INTERVAL_SECONDS: '5'
+      ROVER_WEB_PING_TIMEOUT_SECONDS: '1'
