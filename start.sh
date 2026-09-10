@@ -34,10 +34,14 @@ cat > /tmp/router.json5 << 'EOF'
   // Router mode for Balena fleet
   mode: "router",
 
-  // Listen on ALL interfaces (LAN + BalenaVPN + Docker)
+  // ROS 2 graph is local-only: bind the router to loopback so no Zenoh
+  // traffic can reach LAN / balenaVPN / GSM. Remote access goes through
+  // foxglove_bridge (:8765), rosbridge (:9090) and rover-web-server (:80).
+  // Both loopback families: nodes resolve "localhost" and may pick ::1.
   listen: {
     endpoints: [
-      "tcp/0.0.0.0:7447"      // Catches 10.245.253.239 + 192.168.88.10
+      "tcp/127.0.0.1:7447",
+      "tcp/[::1]:7447"
     ]
   },
 
@@ -46,7 +50,7 @@ cat > /tmp/router.json5 << 'EOF'
     endpoints: []
   },
 
-  // BalenaVPN optimized scouting (disable multicast - VPN blocks it)
+  // No multicast scouting - peers are only ever local
   scouting: {
     multicast: {
       enabled: false
