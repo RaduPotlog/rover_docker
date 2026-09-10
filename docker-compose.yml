@@ -30,11 +30,11 @@ services:
       ROVER_WEB_PORT: '80'
       ROVER_WEB_POLL_INTERVAL_SECONDS: '5'
       ROVER_WEB_PING_TIMEOUT_SECONDS: '1'
-    # curl is absent from python:3.12-slim, hence the python one-liner.
-    # start_period covers the FastAPI lifespan handler, which completes a full
-    # ping sweep before the app accepts traffic.
+    # curl is absent from node:24-slim, hence the node one-liner (global fetch).
+    # start_period covers the initial full ping sweep the server completes
+    # before it starts listening.
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1/healthz')"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 15s
