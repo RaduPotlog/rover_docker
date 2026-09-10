@@ -29,28 +29,50 @@ source /root/ros2_ws/rover_a1/install/setup.bash
 
 # **Zenoh Router - Background with proper management**
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
-cat > /tmp/router.json5 << 'EOF'
+
+# The router is reachable on loopback plus the rover LAN address only, so
+# hosts on the rover LAN can join the ROS 2 graph while balenaVPN and GSM
+# stay closed (binding an address, not 0.0.0.0, is what keeps them out).
+# Override per device/fleet with the ROVER_LAN_IP balenaCloud variable.
+ROVER_LAN_IP=${ROVER_LAN_IP:-192.168.88.10}
+
+# Binding an address the host doesn't have makes rmw_zenohd exit, which
+# would crash-loop the whole container. Give DHCP/NetworkManager a moment,
+# then fall back to loopback-only so the rover still runs locally.
+ZENOH_LAN_ENDPOINT=""
+for _ in $(seq 1 10); do
+  if hostname -I | tr ' ' '\n' | grep -Fxq "$ROVER_LAN_IP"; then
+    ZENOH_LAN_ENDPOINT="\"tcp/${ROVER_LAN_IP}:7447\","
+    break
+  fi
+  sleep 1
+done
+if [ -z "$ZENOH_LAN_ENDPOINT" ]; then
+  echo "WARNING: rover LAN address $ROVER_LAN_IP not present; Zenoh router is loopback-only until the container restarts"
+fi
+
+cat > /tmp/router.json5 << EOF
 {
   // Router mode for Balena fleet
   mode: "router",
 
-  // ROS 2 graph is local-only: bind the router to loopback so no Zenoh
-  // traffic can reach LAN / balenaVPN / GSM. Remote access goes through
-  // foxglove_bridge (:8765), rosbridge (:9090) and rover-web-server (:80).
-  // Both loopback families: nodes resolve "localhost" and may pick ::1.
+  // Loopback (both families: nodes resolve "localhost" and may pick ::1)
+  // plus the rover LAN address. Not 0.0.0.0 - that would expose the ROS 2
+  // graph on balenaVPN and GSM too.
   listen: {
     endpoints: [
+      ${ZENOH_LAN_ENDPOINT}
       "tcp/127.0.0.1:7447",
       "tcp/[::1]:7447"
     ]
   },
 
-  // Connect to other fleet routers if needed
+  // Remote hosts dial in; the rover doesn't dial out
   connect: {
     endpoints: []
   },
 
-  // No multicast scouting - peers are only ever local
+  // No multicast scouting - LAN hosts connect to the router explicitly
   scouting: {
     multicast: {
       enabled: false

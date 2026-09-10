@@ -67,7 +67,39 @@ All containers use host networking, so these bind directly to the device:
 |--------|--------------------------------|
 | 22     | sshd (`rovera1-app`)           |
 | 80     | network dashboard              |
-| 7447   | Zenoh router                   |
+| 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9090   | rosbridge websocket            |
 | 48484  | balena supervisor              |
+
+## ROS 2 over the rover LAN (Zenoh)
+
+The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router in `rovera1-app`
+listens on loopback and on the rover LAN address only (default
+`192.168.88.10`, override with the balenaCloud variable `ROVER_LAN_IP`).
+balenaVPN and GSM are deliberately not bound. The router has no
+authentication, so any host on the rover LAN can join the graph.
+
+If the LAN address isn't on the device within ~10 s of startup, the router
+falls back to loopback-only (logged as a `WARNING`) until the container
+restarts.
+
+To join from a LAN host running ROS 2 Jazzy with `rmw_zenoh_cpp`, run a local
+router that dials the rover, then start nodes as usual:
+
+```bash
+# on the LAN host
+cat > ~/rover_router.json5 << 'CFG'
+{
+  mode: "router",
+  listen:  { endpoints: ["tcp/127.0.0.1:7447"] },
+  connect: { endpoints: ["tcp/192.168.88.10:7447"] },
+  scouting: { multicast: { enabled: false } }
+}
+CFG
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+ZENOH_ROUTER_CONFIG_URI=~/rover_router.json5 ros2 run rmw_zenoh_cpp rmw_zenohd &
+ros2 topic list   # in another shell with RMW_IMPLEMENTATION set
+```
+
+`ROS_DOMAIN_ID` must match on both sides (the rover uses the default, `0`).
