@@ -34,7 +34,7 @@ export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 # hosts on the rover LAN can join the ROS 2 graph while balenaVPN and GSM
 # stay closed (binding an address, not 0.0.0.0, is what keeps them out).
 # Override per device/fleet with the ROVER_LAN_IP balenaCloud variable.
-ROVER_LAN_IP=${ROVER_LAN_IP:-192.168.88.10}
+ROVER_LAN_IP=${ROVER_LAN_IP:-192.168.1.201}
 
 # Binding an address the host doesn't have makes rmw_zenohd exit, which
 # would crash-loop the whole container. Give DHCP/NetworkManager a moment,

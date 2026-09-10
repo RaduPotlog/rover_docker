@@ -76,7 +76,7 @@ All containers use host networking, so these bind directly to the device:
 
 The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router in `rovera1-app`
 listens on loopback and on the rover LAN address only (default
-`192.168.88.10`, override with the balenaCloud variable `ROVER_LAN_IP`).
+`192.168.1.201`, override with the balenaCloud variable `ROVER_LAN_IP`).
 balenaVPN and GSM are deliberately not bound. The router has no
 authentication, so any host on the rover LAN can join the graph.
 
@@ -93,7 +93,7 @@ cat > ~/rover_router.json5 << 'CFG'
 {
   mode: "router",
   listen:  { endpoints: ["tcp/127.0.0.1:7447"] },
-  connect: { endpoints: ["tcp/192.168.88.10:7447"] },
+  connect: { endpoints: ["tcp/192.168.1.201:7447"] },
   scouting: { multicast: { enabled: false } }
 }
 CFG
