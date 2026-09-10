@@ -3,7 +3,7 @@ version: '2.4'
 services:
   rovera1-app:
     build:
-      context: .
+      context: ./rovera1_app
     privileged: true
     restart: always
     network_mode: host

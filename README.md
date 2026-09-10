@@ -2,12 +2,24 @@
 
 Docker files to build the balenaOS release for the Rover A1.
 
-Two services are deployed to the balenaCloud fleet `g_potlog_radu/rovera1`:
+Two services are deployed to the balenaCloud fleet `g_potlog_radu/rovera1`.
+Each has its own folder holding its Dockerfile and any scripts, which is the
+service's build context in `docker-compose.yml`:
 
-| Service            | Contents                                                                   |
-|--------------------|----------------------------------------------------------------------------|
-| `rovera1-app`      | Ubuntu 24.04 + ROS 2 Jazzy + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge) |
-| `rover-web-server` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
+| Service            | Folder              | Contents                                                                   |
+|--------------------|---------------------|----------------------------------------------------------------------------|
+| `rovera1-app`      | `rovera1_app/`      | Ubuntu 24.04 + ROS 2 Jazzy + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
+| `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
+
+```
+rover_docker/
+├── docker-compose.yml
+├── rovera1_app/
+│   ├── Dockerfile
+│   └── start.sh
+└── rover_web_server/
+    └── Dockerfile
+```
 
 ## Deploy
 
