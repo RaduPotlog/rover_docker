@@ -57,7 +57,9 @@ image, set a balenaCloud variable:
 
 Other service variables: `ROVER_WEB_PORT` (default `8080` in the app, set to
 `80` in `docker-compose.yml`), `ROVER_WEB_POLL_INTERVAL_SECONDS`,
-`ROVER_WEB_PING_TIMEOUT_SECONDS`.
+`ROVER_WEB_PING_TIMEOUT_SECONDS`, `ROVER_WEB_ROSBRIDGE_URL` (default
+`ws://127.0.0.1:9090`, the rosbridge in `rovera1-app`; the `/led` page reads
+the LED animation state through it).
 
 ## Ports
 
