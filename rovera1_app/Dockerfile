@@ -134,12 +134,10 @@ RUN make install
 
 RUN apt-get update && apt-get install -y libzmq3-dev sqlite3 \
     && rm -rf /var/lib/apt/lists/*
-WORKDIR /root/ros2_ws/rover_a1/src/rover_behavior_tree
-RUN mkdir build_release
-RUN cmake -S . -B build_release
-RUN cmake --build build_release
-WORKDIR /root/ros2_ws/rover_a1/src/rover_behavior_tree/build_release
-RUN make install
+# BehaviorTree.CPP comes only from apt (ros-jazzy-behaviortree-cpp, installed by rosdep for
+# rover_safety). Do not also build a copy into /usr/local: rover_safety compiles against the
+# /opt/ros headers, and a second, different-version libbehaviortree_cpp.so on the library
+# path segfaults both safety nodes at startup (ABI mismatch) - which kills the LEDs.
 
 RUN echo "export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib" >> /root/.bashrc
 

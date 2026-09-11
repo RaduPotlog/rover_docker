@@ -102,7 +102,10 @@ fi
 
 # **Rover Bringup - Background**
 # Starts the rover nodes and redirects output so it doesn't pollute the container logs.
-export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+# Append, never prepend: /usr/local/lib is only for libs that exist nowhere else
+# (rover_modbus, rover_cppuprofile). Prepending it made it shadow the ROS libs the
+# workspace was compiled against, since LD_LIBRARY_PATH beats their RUNPATH.
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 if [ "$START_ROVER_BRINGUP" = true ]; then
   nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
   ROVER_PID=$!
