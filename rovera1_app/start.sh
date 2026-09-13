@@ -24,7 +24,7 @@ SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
 
 # Source ROS2 + workspace
-source /opt/ros/jazzy/setup.bash
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /root/ros2_ws/rover_a1/install/setup.bash
 
 # **Zenoh Router - Background with proper management**

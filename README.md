@@ -1,6 +1,8 @@
 # rover_docker
 
-Docker files to build the balenaOS release for the Rover A1.
+Docker files to build the ARM64 balena application release for the Rover A1.
+The application uses ROS 2 Lyrical on Ubuntu 26.04; the balenaOS host image
+is managed separately.
 
 Two services are deployed to the balenaCloud fleet `g_potlog_radu/rovera1`.
 Each has its own folder holding its Dockerfile and any scripts, which is the
@@ -8,7 +10,7 @@ service's build context in `docker-compose.yml`:
 
 | Service            | Folder              | Contents                                                                   |
 |--------------------|---------------------|----------------------------------------------------------------------------|
-| `rovera1-app`      | `rovera1_app/`      | Ubuntu 24.04 + ROS 2 Jazzy + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
+| `rovera1-app`      | `rovera1_app/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
 
 ```
@@ -21,7 +23,57 @@ rover_docker/
     └── Dockerfile
 ```
 
+## Build and validate for ARM64
+
+Run commands from `rover_docker/`. Use a Docker Buildx builder that supports
+`linux/arm64`, either natively or through emulation. In WSL, enable Docker
+Desktop integration for the distribution first.
+
+```bash
+bash -n rovera1_app/start.sh
+docker compose config --quiet
+docker buildx inspect --bootstrap
+docker buildx build --platform linux/arm64 --pull --no-cache --load \
+  -t rovera1-app:lyrical ./rovera1_app
+docker buildx build --platform linux/arm64 --pull --no-cache --load \
+  -t rover-web-server:lyrical ./rover_web_server
+```
+
+The application build defaults to the `rover_ros` **lyrical** branch and
+imports its `hardware_deps.repos`, including the Lyrical receiver and
+transport dependencies. `ROS_DISTRO=lyrical` is baked into the image and
+used for package installation, rosdep, compilation, and startup; do not
+override it with a different distribution at runtime.
+
+Check the built image without starting hardware bringup:
+
+```bash
+docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
+  rovera1-app:lyrical -ec '
+    test "$(dpkg --print-architecture)" = arm64
+    test "$ROS_DISTRO" = lyrical
+    source /opt/ros/$ROS_DISTRO/setup.bash
+    source /root/ros2_ws/rover_a1/install/setup.bash
+    for package in rover_bringup rmw_zenoh_cpp rosbridge_server rosapi foxglove_bridge; do
+      ros2 pkg prefix "$package"
+    done
+  '
+```
+
+Before deployment, smoke-test `rmw_zenohd`, rosbridge, and Foxglove in an
+isolated container with the entrypoint overridden (no hardware bringup),
+and check workspace shared libraries with `ldd` for missing dependencies.
+Verify the web image's `/healthz` endpoint returns success. On the rover,
+verify hardware bringup, the LAN Zenoh connection, and bridge ports after
+deployment. A successful image build alone does not validate hardware.
+
+See the [Docker multi-platform build documentation](https://docs.docker.com/build/building/multi-platform/)
+for builder setup.
+
 ## Deploy
+
+The fleet must use an ARM64 device type. This command builds and deploys
+both services to the fleet; local validation above does not deploy them.
 
 ```bash
 balena push g_potlog_radu/rovera1 --nocache
@@ -32,13 +84,19 @@ balena push g_potlog_radu/rovera1 --nocache
 respectively). Those clones sit in cached layers, so a plain `balena push`
 will happily ship stale application code.
 
-Pin a build to specific commits instead of the branch tips with:
+Select specific application commits instead of branch tips with:
 
 ```bash
 balena push g_potlog_radu/rovera1 \
   --build-arg ROVER_ROS_REF=<sha> \
   --build-arg ROVER_WEB_REF=<sha>
 ```
+
+Use a Lyrical-compatible commit for `ROVER_ROS_REF`. These overrides pin
+only the two application repositories: imported dependency branches, base
+image tags, apt packages, and npm/uv tool versions can still change. Use
+`--nocache` when refreshing those dependencies even with pinned application
+commits.
 
 ## Network dashboard
 
@@ -86,11 +144,12 @@ If the LAN address isn't on the device within ~10 s of startup, the router
 falls back to loopback-only (logged as a `WARNING`) until the container
 restarts.
 
-To join from a LAN host running ROS 2 Jazzy with `rmw_zenoh_cpp`, run a local
+To join from a LAN host running ROS 2 Lyrical with `rmw_zenoh_cpp`, run a local
 router that dials the rover, then start nodes as usual:
 
 ```bash
 # on the LAN host
+source /opt/ros/lyrical/setup.bash
 cat > ~/rover_router.json5 << 'CFG'
 {
   mode: "router",
