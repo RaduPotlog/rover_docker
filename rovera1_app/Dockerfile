@@ -121,7 +121,7 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 RUN rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i
 
 WORKDIR /root/ros2_ws/rover_a1/src/rover_cppuprofile
-RUN cmake -Bbuild . -DPROFILE_ENABLED=OFF
+RUN cmake -Bbuild . -DPROFILE_ENABLED=ON
 RUN cmake --build build
 WORKDIR /root/ros2_ws/rover_a1/src/rover_cppuprofile/build
 RUN make install
