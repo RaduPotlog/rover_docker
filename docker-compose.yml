@@ -39,3 +39,23 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+  rover-cockpit:
+    build:
+      context: ./rover_cockpit
+    restart: always
+    # The Cockpit plugin tells the browser to open ws://<same host>:8765
+    # (foxglove_bridge in rovera1-app), so the page must be reached on the
+    # rover's own address - host mode, no port mapping.
+    network_mode: host
+    environment:
+      # 9090 is rosbridge in rovera1-app.
+      COCKPIT_PORT: '9091'
+      COCKPIT_USER: 'rover'
+      # COCKPIT_PASSWORD has no default: set it as a balenaCloud service
+      # variable, or the container exits with an error.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9091/ping"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
