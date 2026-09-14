@@ -158,7 +158,9 @@ log in, and the diagnostics page opens directly.
   every container start.
 - **Data path:** the page runs in the browser and connects straight to
   `ws://<same host>:8765` (foxglove_bridge in `rovera1-app`), subscribing to
-  `/diagnostics_agg`. That topic is published by the `rover_diagnostic_aggregator`
+  `/rover/diagnostics_agg` (`<ROVER_NAMESPACE>/diagnostics_agg`; the container
+  writes the namespace to `/etc/clearpath/robot.yaml`, where the plugin reads it).
+  That topic is published by the `rover_diagnostic_aggregator`
   that `rover_diag_manager`'s `system_diag.launch.py` starts as part of
   `rover_bringup`; its groups are configured in
   `rover_diag_manager/config/diagnostic_aggregator.yaml`.
@@ -167,6 +169,17 @@ log in, and the diagnostics page opens directly.
   port 80, not 9091 or 8765.
 - The container needs no ROS, no privileges and no Zenoh access; if the page
   shows "disconnected", check foxglove_bridge on port 8765 in `rovera1-app`.
+
+## ROS namespace
+
+`rovera1-app` runs every rover node under the namespace in `ROVER_NAMESPACE`
+(default `rover`, set in `docker-compose.yml`, overridable as a balenaCloud
+variable), so rover topics and services are `/rover/cmd_vel`,
+`/rover/odom`, `/rover/led/state`, `/rover/hardware_interface/gpio_state`, …
+and TF frames are `rover/odom`, `rover/base_link`. `/tf`, `/tf_static`,
+`/rosout` and `/parameter_events` stay global, as do the web bridges
+(`/rosapi/*`, `/client_count`). `rover-web-server` and `rover-cockpit` read the
+same variable, so change it on all three services together.
 
 ## ROS 2 over the rover LAN (Zenoh)
 

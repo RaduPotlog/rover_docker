@@ -11,6 +11,10 @@ services:
       io.balena.features.dbus: 'true'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
+    environment:
+      # ROS namespace for every rover node and topic (/rover/cmd_vel, ...).
+      # rover_bringup reads it; keep it equal in rover-web-server and rover-cockpit.
+      ROVER_NAMESPACE: 'rover'
   rover-web-server:
     build:
       context: ./rover_web_server
@@ -30,6 +34,8 @@ services:
       ROVER_WEB_PORT: '80'
       ROVER_WEB_POLL_INTERVAL_SECONDS: '5'
       ROVER_WEB_PING_TIMEOUT_SECONDS: '1'
+      # Namespace of the LED topics (must match rovera1-app).
+      ROVER_NAMESPACE: 'rover'
     # curl is absent from node:24-slim, hence the node one-liner (global fetch).
     # start_period covers the initial full ping sweep the server completes
     # before it starts listening.
@@ -51,6 +57,8 @@ services:
       # 9090 is rosbridge in rovera1-app.
       COCKPIT_PORT: '9091'
       COCKPIT_USER: 'rover'
+      # Namespace of /<ns>/diagnostics_agg (must match rovera1-app).
+      ROVER_NAMESPACE: 'rover'
       # COCKPIT_PASSWORD has no default: set it as a balenaCloud service
       # variable, or the container exits with an error.
     healthcheck:
