@@ -81,8 +81,9 @@ RUN apt-get update && apt-get install -y \
     python3-colcon-common-extensions \
     && rm -rf /var/lib/apt/lists/*
 
-# rosbridge (websocket + rosapi) — required by ros-mcp-server for ROS
-# introspection/control; the full suite pulls in rosapi as a dependency.
+# rosbridge (websocket + rosapi) — kept only for ros-mcp-server (ROS
+# introspection/control); the web dashboards use foxglove_bridge. The full
+# suite pulls in rosapi as a dependency.
 RUN apt-get update && apt-get install -y \
     ros-${ROS_DISTRO}-rosbridge-suite \
     && rm -rf /var/lib/apt/lists/*

@@ -127,9 +127,9 @@ image, set a balenaCloud variable:
 
 Other service variables: `ROVER_WEB_PORT` (default `8080` in the app, set to
 `80` in `docker-compose.yml`), `ROVER_WEB_POLL_INTERVAL_SECONDS`,
-`ROVER_WEB_PING_TIMEOUT_SECONDS`, `ROVER_WEB_ROSBRIDGE_URL` (default
-`ws://127.0.0.1:9090`, the rosbridge in `rovera1-app`; the `/led` page reads
-the LED animation state through it).
+`ROVER_WEB_PING_TIMEOUT_SECONDS`, `ROVER_WEB_FOXGLOVE_URL` (default
+`ws://127.0.0.1:8765`, the foxglove_bridge in `rovera1-app`; the `/led` page
+reads the LED animation state through it).
 
 ## Ports
 
@@ -141,7 +141,7 @@ All containers use host networking, so these bind directly to the device:
 | 80     | network dashboard              |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
-| 9090   | rosbridge websocket            |
+| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) |
 | 9091   | Cockpit ROS 2 diagnostics (`rover-cockpit`) |
 | 48484  | balena supervisor              |
 

@@ -118,8 +118,9 @@ fi
 # Optional short delay to let rover nodes initialize before the bridges connect
 sleep 2
 
-# rosbridge (websocket + rosapi) - required for ros-mcp-server to introspect
-# and control the ROS graph. Supervised like everything else below.
+# rosbridge (websocket + rosapi) - kept only for ros-mcp-server to introspect
+# and control the ROS graph; the web dashboards (network monitor LED page,
+# Cockpit diagnostics) use foxglove_bridge. Supervised like everything else below.
 nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml > /tmp/rosbridge.log 2>&1 < /dev/null &
 ROSBRIDGE_PID=$!
 CHILD_PIDS+=("$ROSBRIDGE_PID")
