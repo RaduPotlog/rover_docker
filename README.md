@@ -158,7 +158,7 @@ log in, and the diagnostics page opens directly.
   every container start.
 - **Data path:** the page runs in the browser and connects straight to
   `ws://<same host>:8765` (foxglove_bridge in `rovera1-app`), subscribing to
-  `/diagnostics_agg`. That topic is published by the `diagnostic_aggregator`
+  `/diagnostics_agg`. That topic is published by the `rover_diagnostic_aggregator`
   that `rover_diag_manager`'s `system_diag.launch.py` starts as part of
   `rover_bringup`; its groups are configured in
   `rover_diag_manager/config/diagnostic_aggregator.yaml`.

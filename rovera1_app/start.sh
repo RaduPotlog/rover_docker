@@ -118,20 +118,17 @@ fi
 # Optional short delay to let rover nodes initialize before the bridges connect
 sleep 2
 
-# rosbridge (websocket + rosapi) - kept only for ros-mcp-server to introspect
-# and control the ROS graph; the web dashboards (network monitor LED page,
-# Cockpit diagnostics) use foxglove_bridge. Supervised like everything else below.
-nohup ros2 launch rosbridge_server rosbridge_websocket_launch.xml > /tmp/rosbridge.log 2>&1 < /dev/null &
-ROSBRIDGE_PID=$!
-CHILD_PIDS+=("$ROSBRIDGE_PID")
-echo "rosbridge started (PID: $ROSBRIDGE_PID)"
-
-# foxglove_bridge is supervised like everything else (not exec'd as PID 1),
-# so a crash here is detected the same way as a crash in any other process.
-nohup ros2 launch foxglove_bridge foxglove_bridge_launch.xml > /tmp/foxglove_bridge.log 2>&1 < /dev/null &
-FOXGLOVE_PID=$!
-CHILD_PIDS+=("$FOXGLOVE_PID")
-echo "foxglove_bridge started (PID: $FOXGLOVE_PID)"
+# Web bridges, supervised like everything else below (not exec'd as PID 1), so a
+# crash here is detected the same way as a crash in any other process:
+# - foxglove_bridge (/rover_foxglove_bridge) - used by the web dashboards (network
+#   monitor LED page, Cockpit diagnostics).
+# - rosbridge websocket + rosapi (/rover_rosbridge_websocket, /rosapi) - kept only for
+#   ros-mcp-server to introspect and control the ROS graph.
+# rover_web_bridges.launch.py starts them under rover_-prefixed node names.
+nohup ros2 launch rover_bringup rover_web_bridges.launch.py > /tmp/web_bridges.log 2>&1 < /dev/null &
+BRIDGES_PID=$!
+CHILD_PIDS+=("$BRIDGES_PID")
+echo "Web bridges (foxglove_bridge, rosbridge) started (PID: $BRIDGES_PID)"
 
 # **Supervise** - block until the first of the supervised processes exits
 # (crash or otherwise). Rather than let the container keep running with a
@@ -141,7 +138,7 @@ echo "foxglove_bridge started (PID: $FOXGLOVE_PID)"
 wait -n "${CHILD_PIDS[@]}"
 EXIT_CODE=$?
 
-STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "rosbridge:$ROSBRIDGE_PID" "foxglove_bridge:$FOXGLOVE_PID")
+STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "web_bridges:$BRIDGES_PID")
 if [ "$START_ROVER_BRINGUP" = true ]; then
   STATUS_ENTRIES+=("rover_bringup:$ROVER_PID")
 fi
