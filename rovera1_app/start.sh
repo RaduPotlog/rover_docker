@@ -4,8 +4,13 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
-# Toggle whether the rover_bringup launch is started at all.
-START_ROVER_BRINGUP=true
+# Toggle whether the rover_bringup launch is started at all. Set START_ROVER_BRINGUP as a
+# balenaCloud device/fleet variable (true/false); unset or empty means true. Changing the
+# variable makes the balena supervisor restart this container, which re-reads it here.
+case "${START_ROVER_BRINGUP:-true}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) START_ROVER_BRINGUP=true ;;
+  *) START_ROVER_BRINGUP=false ;;
+esac
 
 terminate_children() {
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then

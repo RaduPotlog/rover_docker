@@ -170,6 +170,28 @@ log in, and the diagnostics page opens directly.
 - The container needs no ROS, no privileges and no Zenoh access; if the page
   shows "disconnected", check foxglove_bridge on port 8765 in `rovera1-app`.
 
+## Device variables
+
+`rovera1-app` reads these from the environment. Defaults come from `docker-compose.yml` or
+`start.sh`. Override them per device (balenaCloud → device → **Device Variables**) or per fleet
+(**Fleet Variables**):
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `START_ROVER_BRINGUP` | `true` | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. |
+| `ROVER_NAMESPACE` | `rover` | ROS namespace (see below). Keep it equal for `rover-web-server` and `rover-cockpit`. |
+| `ROVER_LAN_IP` | `192.168.1.201` | Rover LAN address the Zenoh router binds. |
+
+```bash
+balena env set START_ROVER_BRINGUP false --device <device-uuid> --service rovera1-app
+```
+
+Changing a variable restarts the affected containers automatically, and `start.sh` re-reads
+the value on the next start. There is no image rebuild, but expect roughly 15–30 s of downtime
+for `rovera1-app`, with its web bridges down during that time. A variable scoped to the
+`rovera1-app` service restarts only that service; an all-services device variable restarts
+every service.
+
 ## ROS namespace
 
 `rovera1-app` runs every rover node under the namespace in `ROVER_NAMESPACE`
