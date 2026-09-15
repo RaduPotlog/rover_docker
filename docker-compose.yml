@@ -9,6 +9,8 @@ services:
     network_mode: host
     labels:
       io.balena.features.dbus: 'true'
+      # rover_safety powers off the device through the Supervisor API (/v1/shutdown).
+      io.balena.features.supervisor-api: '1'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
     environment:

@@ -120,6 +120,11 @@ RUN rosdep init
 ENV ROVER_ROS_BUILD_TYPE=hardware
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
 RUN rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i
+# rover_safety powers off the ROS controller with dbus-send (systemd-logind over the host D-Bus
+# socket, io.balena.features.dbus) when the balena Supervisor API is unavailable. dbus has no
+# rosdep key, so it is installed here.
+RUN apt-get update && apt-get install -y dbus-bin \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/ros2_ws/rover_a1/src/rover_cppuprofile
 RUN cmake -Bbuild . -DPROFILE_ENABLED=ON
