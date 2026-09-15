@@ -19,6 +19,9 @@ services:
       ROVER_NAMESPACE: 'rover'
       # Start rover_bringup (true/false). A balenaCloud device or fleet variable overrides this.
       START_ROVER_BRINGUP: 'true'
+      # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
+      # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
+      EKF_USE_GPS: 'false'
   rover-web-server:
     build:
       context: ./rover_web_server

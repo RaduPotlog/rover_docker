@@ -12,6 +12,15 @@ case "${START_ROVER_BRINGUP:-true}" in
   *) START_ROVER_BRINGUP=false ;;
 esac
 
+# Localization mode for rover_bringup (read there through the EKF_USE_GPS environment variable).
+# Normalized like START_ROVER_BRINGUP so the launch files only ever see true/false; unset or
+# empty means false (wheels + IMU), true adds the RUTX11 GPS (dual EKF).
+case "${EKF_USE_GPS:-false}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) EKF_USE_GPS=true ;;
+  *) EKF_USE_GPS=false ;;
+esac
+export EKF_USE_GPS
+
 terminate_children() {
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -115,7 +124,7 @@ if [ "$START_ROVER_BRINGUP" = true ]; then
   nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
   ROVER_PID=$!
   CHILD_PIDS+=("$ROVER_PID")
-  echo "Rover bringup started in background (PID: $ROVER_PID)"
+  echo "Rover bringup started in background (PID: $ROVER_PID, EKF_USE_GPS=$EKF_USE_GPS)"
 else
   echo "Rover bringup disabled (START_ROVER_BRINGUP=false); skipping"
 fi

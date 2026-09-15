@@ -179,6 +179,7 @@ log in, and the diagnostics page opens directly.
 | Variable | Default | Effect |
 |----------|---------|--------|
 | `START_ROVER_BRINGUP` | `true` | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. |
+| `EKF_USE_GPS` | `false` | Localization mode. `false`: EKF on wheel odometry + IMU. `true`: also fuses the RUTX11 GPS (`rover_gps` heading alignment, `navsat_transform`, global EKF publishing `map → odom`). Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. The GPS driver and its diagnostics run in both modes. |
 | `ROVER_NAMESPACE` | `rover` | ROS namespace (see below). Keep it equal for `rover-web-server` and `rover-cockpit`. |
 | `ROVER_LAN_IP` | `192.168.1.201` | Rover LAN address the Zenoh router binds. |
 
