@@ -22,6 +22,13 @@ services:
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
       # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
       EKF_USE_GPS: 'false'
+      # Sensor mount poses relative to body_link (x forward, y left, z up) are read by
+      # rover_description from these optional balenaCloud device/fleet variables. They are
+      # deliberately not set here, so the URDF defaults apply until a variable is defined:
+      #   ROBOT_GPS_LOCALIZATION_X/Y/Z [m]   ROBOT_GPS_ORIENTATION_R/P/Y [rad]  (default 0)
+      #   ROBOT_IMU_LOCALIZATION_X/Y/Z [m]   ROBOT_IMU_ORIENTATION_R/P/Y [rad]
+      #   ROBOT_LIDAR_LOCALIZATION_X/Y/Z [m] ROBOT_LIDAR_ORIENTATION_R/P/Y [rad]
+      # A non-numeric value is ignored with a warning in /tmp/rover_bringup.log.
   rover-web-server:
     build:
       context: ./rover_web_server
