@@ -51,8 +51,8 @@ RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
 # Both repositories track their master branch by default, so every `--nocache` build picks
-# up the latest commit; pin either with --build-arg. rover_ros is needed because
-# rover_mission_manager depends on rover_utils (and rover_msgs transitively) - the hardware
+# up the latest commit; pin either with --build-arg. rover_ros is cloned only for
+# rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
 # packages are never built, `--packages-up-to rover_autonomy` stops short of them.
 ARG ROVER_ROS_REF=master
 ARG ROVER_ORCHESTRATOR_REF=master
@@ -67,8 +67,16 @@ RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
+# Scan only what `--packages-up-to rover_autonomy` builds. src/rover_ros is cloned whole, but
+# its hardware packages depend on source-only repos from hardware_deps.repos, which this image
+# deliberately does not import - scanning them makes rosdep fail on [crsf_receiver_msg] and
+# [rover_rslidar_sdk], and would drag in the hardware stack we are trying to leave out.
+# src/rover_pointcloud_crop_box must stay listed so -i ignores its `pointcloud_crop_box` key.
 # Pulls the Nav 2 stack, slam_toolbox, spatio_temporal_voxel_layer and behaviortree_cpp.
-RUN rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i
+RUN rosdep install -y -i --rosdistro "${ROS_DISTRO}" \
+    --from-paths src/rover_orchestrator \
+                 src/rover_ros/rover_utils \
+                 src/rover_pointcloud_crop_box
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --symlink-install --packages-up-to rover_autonomy \
