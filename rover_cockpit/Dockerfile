@@ -8,11 +8,11 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y git make gettext ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Tracks the tip of `main` by default, so every `balena push --nocache` picks
+# Tracks the tip of `master` by default, so every `balena push --nocache` picks
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_COCKPIT_REF=<sha>` for a reproducible build instead.
 # Same convention as ROVER_ROS_REF / ROVER_WEB_REF in the other services.
-ARG ROVER_COCKPIT_REF=main
+ARG ROVER_COCKPIT_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics.git /src \
     && git -C /src checkout ${ROVER_COCKPIT_REF}
 

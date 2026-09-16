@@ -101,11 +101,11 @@ RUN apt-get update && apt-get install -y libyaml-cpp-dev libpcap-dev \
 RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
-# Tracks the tip of the `lyrical` branch by default, so every `--nocache`
+# Tracks the tip of the `master` branch by default, so every `--nocache`
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-ARG ROVER_ROS_REF=lyrical
+ARG ROVER_ROS_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
