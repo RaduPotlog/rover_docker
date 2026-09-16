@@ -72,9 +72,9 @@ Before deployment, smoke-test `rmw_zenohd`, rosbridge, and Foxglove in an
 isolated container with the entrypoint overridden (no hardware bringup),
 and check workspace shared libraries with `ldd` for missing dependencies.
 Verify the web image's `/healthz` endpoint returns success. Start the Cockpit
-image with `-e COCKPIT_PASSWORD=<test> --network host`, check
+image with `-e ROVER_COCKPIT_PASSWORD=<test> --network host`, check
 `curl -fsS http://127.0.0.1:9091/ping`, and log in at `http://localhost:9091`;
-without `COCKPIT_PASSWORD` it must exit with an error. On the rover,
+without `ROVER_COCKPIT_PASSWORD` it must exit with an error. On the rover,
 verify hardware bringup, the LAN Zenoh connection, and bridge ports after
 deployment. A successful image build alone does not validate hardware.
 
@@ -152,9 +152,9 @@ All containers use host networking, so these bind directly to the device:
 installed. Open `http://<rover-lan-ip>:9091` (e.g. `http://192.168.1.201:9091`),
 log in, and the diagnostics page opens directly.
 
-- **Login:** set the balenaCloud service variable `COCKPIT_PASSWORD` for
+- **Login:** set the balenaCloud service variable `ROVER_COCKPIT_PASSWORD` for
   `rover-cockpit` (required — the container exits without it). The user name is
-  `COCKPIT_USER` (default `rover`; `root` is refused). Both are re-applied on
+  `ROVER_COCKPIT_USER` (default `rover`; `root` is refused). Both are re-applied on
   every container start.
 - **Data path:** the page runs in the browser and connects straight to
   `ws://<same host>:8765` (foxglove_bridge in `rovera1-app`), subscribing to
@@ -178,13 +178,13 @@ log in, and the diagnostics page opens directly.
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `START_ROVER_BRINGUP` | `true` | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. |
-| `EKF_USE_GPS` | `false` | Localization mode. `false`: EKF on wheel odometry + IMU. `true`: also fuses the RUTX11 GPS (`rover_gps` heading alignment, `navsat_transform`, global EKF publishing `map → odom`). Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. The GPS driver and its diagnostics run in both modes. |
+| `ROVER_START_BRINGUP` | `true` | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. |
+| `ROVER_EKF_USE_GPS` | `false` | Localization mode. `false`: EKF on wheel odometry + IMU. `true`: also fuses the RUTX11 GPS (`rover_gps` heading alignment, `navsat_transform`, global EKF publishing `map → odom`). Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. The GPS driver and its diagnostics run in both modes. |
 | `ROVER_NAMESPACE` | `rover` | ROS namespace (see below). Keep it equal for `rover-web-server` and `rover-cockpit`. |
 | `ROVER_LAN_IP` | `192.168.1.201` | Rover LAN address the Zenoh router binds. |
 
 ```bash
-balena env set START_ROVER_BRINGUP false --device <device-uuid> --service rovera1-app
+balena env set ROVER_START_BRINGUP false --device <device-uuid> --service rovera1-app
 ```
 
 Changing a variable restarts the affected containers automatically, and `start.sh` re-reads

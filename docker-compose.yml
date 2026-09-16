@@ -18,16 +18,16 @@ services:
       # rover_bringup reads it; keep it equal in rover-web-server and rover-cockpit.
       ROVER_NAMESPACE: 'rover'
       # Start rover_bringup (true/false). A balenaCloud device or fleet variable overrides this.
-      START_ROVER_BRINGUP: 'true'
+      ROVER_START_BRINGUP: 'true'
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
       # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
-      EKF_USE_GPS: 'false'
+      ROVER_EKF_USE_GPS: 'false'
       # Sensor mount poses relative to body_link (x forward, y left, z up) are read by
       # rover_description from these optional balenaCloud device/fleet variables. They are
       # deliberately not set here, so the URDF defaults apply until a variable is defined:
-      #   ROBOT_GPS_LOCALIZATION_X/Y/Z [m]   ROBOT_GPS_ORIENTATION_R/P/Y [rad]  (default 0)
-      #   ROBOT_IMU_LOCALIZATION_X/Y/Z [m]   ROBOT_IMU_ORIENTATION_R/P/Y [rad]
-      #   ROBOT_LIDAR_LOCALIZATION_X/Y/Z [m] ROBOT_LIDAR_ORIENTATION_R/P/Y [rad]
+      #   ROVER_GPS_LOCALIZATION_X/Y/Z [m]   ROVER_GPS_ORIENTATION_R/P/Y [rad]  (default 0)
+      #   ROVER_IMU_LOCALIZATION_X/Y/Z [m]   ROVER_IMU_ORIENTATION_R/P/Y [rad]
+      #   ROVER_LIDAR_LOCALIZATION_X/Y/Z [m] ROVER_LIDAR_ORIENTATION_R/P/Y [rad]
       # A non-numeric value is ignored with a warning in /tmp/rover_bringup.log.
   rover-web-server:
     build:
@@ -69,11 +69,11 @@ services:
     network_mode: host
     environment:
       # 9090 is rosbridge in rovera1-app.
-      COCKPIT_PORT: '9091'
-      COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PORT: '9091'
+      ROVER_COCKPIT_USER: 'rover'
       # Namespace of /<ns>/diagnostics_agg (must match rovera1-app).
       ROVER_NAMESPACE: 'rover'
-      # COCKPIT_PASSWORD has no default: set it as a balenaCloud service
+      # ROVER_COCKPIT_PASSWORD has no default: set it as a balenaCloud service
       # variable, or the container exits with an error.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9091/ping"]
