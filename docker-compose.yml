@@ -21,7 +21,7 @@ services:
       ROVER_START_BRINGUP: 'true'
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
       # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
-      ROVER_EKF_USE_GPS: 'false'
+      ROVER_USE_GPS: 'false'
       # Start the RoboSense RS16 lidar driver (true/false). Leave false on rovers with no
       # lidar fitted. A balenaCloud device or fleet variable overrides this.
       ROVER_USE_LIDAR: 'false'
