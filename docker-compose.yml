@@ -22,6 +22,9 @@ services:
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
       # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
       ROVER_EKF_USE_GPS: 'false'
+      # Start the RoboSense RS16 lidar driver (true/false). Leave false on rovers with no
+      # lidar fitted. A balenaCloud device or fleet variable overrides this.
+      ROVER_USE_LIDAR: 'false'
       # Sensor mount poses relative to body_link (x forward, y left, z up) are read by
       # rover_description from these optional balenaCloud device/fleet variables. They are
       # deliberately not set here, so the URDF defaults apply until a variable is defined:
