@@ -47,9 +47,9 @@ docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-cockpit:lyrical ./rover_cockpit
 ```
 
-The application build defaults to the `rover_ros` **lyrical** branch and
-imports its `hardware_deps.repos`, including the Lyrical receiver and
-transport dependencies. `ROS_DISTRO=lyrical` is baked into the image and
+The application build defaults to the `rover_ros` **master** branch and
+imports its `hardware_deps.repos`, including the receiver and transport
+dependencies. `ROS_DISTRO=lyrical` is baked into the image and
 used for package installation, rosdep, compilation, and startup; do not
 override it with a different distribution at runtime.
 
