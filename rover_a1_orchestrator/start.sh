@@ -1,0 +1,166 @@
+#!/bin/bash -e
+set -x  # Debug logging for Balena
+
+# All long-running processes we supervise. Populated as each is started.
+CHILD_PIDS=()
+
+terminate_children() {
+  if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
+    kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
+    wait "${CHILD_PIDS[@]}" 2>/dev/null || true
+  fi
+}
+
+# Forward container stop/kill signals to every supervised process instead
+# of only whichever one happens to be PID 1.
+trap 'terminate_children; exit 0' TERM INT
+
+# Normalize a balenaCloud boolean the same way rover-a1-platform's start.sh does: unset or
+# empty falls back to $2, and anything that is not true/1/yes/on (any case) is false.
+norm_bool() {
+  case "${1:-$2}" in
+    [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) echo true ;;
+    *) echo false ;;
+  esac
+}
+
+ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=$(norm_bool "${ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER:-}" false)
+ROVER_START_BRINGUP=$(norm_bool "${ROVER_START_BRINGUP:-}" true)
+ROVER_START_NAV_BRINGUP=$(norm_bool "${ROVER_START_NAV_BRINGUP:-}" false)
+ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" true)
+ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
+ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
+
+# The orchestrator stack runs on this device only when it is not delegated to a companion
+# controller AND the platform bringup it drives is actually running AND navigation is wanted.
+START_ORCHESTRATOR=false
+DISABLED_REASON=""
+if [ "$ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER" = false ]; then
+  if [ "$ROVER_START_BRINGUP" = true ]; then
+    if [ "$ROVER_START_NAV_BRINGUP" = true ]; then
+      START_ORCHESTRATOR=true
+    else
+      DISABLED_REASON="ROVER_START_NAV_BRINGUP=false (navigation not requested)"
+    fi
+  else
+    DISABLED_REASON="ROVER_START_BRINGUP=false (no platform bringup to navigate with)"
+  fi
+else
+  DISABLED_REASON="ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=true (the stack runs off-device)"
+fi
+
+# Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
+# service. Changing any balenaCloud variable restarts the container, which re-reads them here.
+if [ "$START_ORCHESTRATOR" != true ]; then
+  echo "Orchestrator stack disabled: ${DISABLED_REASON}; idling"
+  exec sleep infinity
+fi
+
+# Nav 2's global frame owner. ROVER_USE_GPS decides it by default - 'gps' means
+# rover_ekf_global_node (rover-a1-platform) publishes map -> odom, 'odom' means nobody does
+# and navigation is odometry-relative. ROVER_LOCALIZATION_SOURCE overrides that, and is the
+# only way to reach 'slam' (slam_toolbox, which requires ROVER_USE_GPS=false).
+if [ "$ROVER_USE_GPS" = true ]; then
+  LOCALIZATION_SOURCE=gps
+else
+  LOCALIZATION_SOURCE=odom
+fi
+if [ -n "${ROVER_LOCALIZATION_SOURCE:-}" ]; then
+  case "$ROVER_LOCALIZATION_SOURCE" in
+    odom|gps|slam)
+      LOCALIZATION_SOURCE="$ROVER_LOCALIZATION_SOURCE"
+      ;;
+    *)
+      echo "WARNING: ROVER_LOCALIZATION_SOURCE='${ROVER_LOCALIZATION_SOURCE}' is not one of odom|gps|slam; using '${LOCALIZATION_SOURCE}'"
+      ;;
+  esac
+fi
+if [ "$LOCALIZATION_SOURCE" = slam ] && [ "$ROVER_USE_GPS" = true ]; then
+  echo "WARNING: localization_source=slam with ROVER_USE_GPS=true - slam_toolbox and rover_ekf_global_node would both publish map -> odom"
+fi
+
+# Both Nav 2 costmaps mark and clear from <namespace>/scan, and the navigation trees stop
+# driving when the lidar diagnostics go bad.
+if [ "$ROVER_USE_LIDAR" != true ]; then
+  echo "WARNING: ROVER_USE_LIDAR=false - no lidar driver in rover-a1-platform, so the costmaps stay empty and navigation drives blind"
+fi
+
+# Source ROS2 + workspace
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source /root/ros2_ws/rover_a1/install/setup.bash
+
+# Join the Zenoh graph as a session. The router itself runs in rover-a1-platform; both
+# containers are network_mode: host, so it is reachable on loopback. Deliberately no
+# ZENOH_ROUTER_CONFIG_URI here - a second router would fight the first one for port 7447.
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# Balena starts services in no particular order, so wait for the router rather than assume it.
+# Falls through with a warning: rmw_zenoh retries the connection on its own.
+ZENOH_ROUTER_READY=false
+for _ in $(seq 1 60); do
+  if (exec 3<>/dev/tcp/127.0.0.1/7447) 2>/dev/null; then
+    ZENOH_ROUTER_READY=true
+    break
+  fi
+  sleep 1
+done
+if [ "$ZENOH_ROUTER_READY" != true ]; then
+  echo "WARNING: Zenoh router (127.0.0.1:7447, rover-a1-platform) not reachable after 60 s; starting anyway"
+fi
+
+# Kill any existing daemon (rmw_zenoh conflicts)
+pkill -f ros2_daemon || true
+sleep 1
+
+ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
+ROVER_NAV_MAP=${ROVER_NAV_MAP:-/root/ros2_ws/rover_a1/install/rover_navigation/share/rover_navigation/map/empty_world.yaml}
+
+# **Nav 2 - Background**
+# namespace and localization_source are passed explicitly even though both launch files read
+# ROVER_NAMESPACE themselves: rover_mission_manager must be launched with the same
+# localization_source as rover_navigation, and passing both proves they agree.
+nohup ros2 launch rover_navigation bringup.launch.py \
+  use_sim_time:=False \
+  namespace:="${ROVER_NAMESPACE}" \
+  localization_source:="${LOCALIZATION_SOURCE}" \
+  map:="${ROVER_NAV_MAP}" \
+  > /tmp/rover_nav.log 2>&1 < /dev/null &
+NAV_PID=$!
+CHILD_PIDS+=("$NAV_PID")
+echo "Nav 2 bringup started in background (PID: $NAV_PID, localization_source=$LOCALIZATION_SOURCE, map=$ROVER_NAV_MAP)"
+
+# **Mission manager - Background**
+if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
+  nohup ros2 launch rover_mission_manager rover_mission_manager.launch.py \
+    use_sim_time:=False \
+    namespace:="${ROVER_NAMESPACE}" \
+    localization_source:="${LOCALIZATION_SOURCE}" \
+    > /tmp/rover_mission_manager.log 2>&1 < /dev/null &
+  MISSION_PID=$!
+  CHILD_PIDS+=("$MISSION_PID")
+  echo "Mission manager started in background (PID: $MISSION_PID)"
+else
+  echo "Mission manager disabled (ROVER_START_MISSION_MANAGER=false); Nav 2 only"
+fi
+
+# **Supervise** - block until the first of the supervised processes exits (crash or
+# otherwise), then tear down everything else and exit so docker-compose's `restart: always`
+# (Balena) brings the whole stack back up cleanly.
+wait -n "${CHILD_PIDS[@]}"
+EXIT_CODE=$?
+
+STATUS_ENTRIES=("rover_navigation:$NAV_PID")
+if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
+  STATUS_ENTRIES+=("rover_mission_manager:$MISSION_PID")
+fi
+
+for entry in "${STATUS_ENTRIES[@]}"; do
+  name=${entry%%:*}
+  pid=${entry##*:}
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+  fi
+done
+
+terminate_children
+exit "$EXIT_CODE"

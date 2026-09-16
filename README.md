@@ -4,20 +4,24 @@ Docker files to build the ARM64 balena application release for the Rover A1.
 The application uses ROS 2 Lyrical on Ubuntu 26.04; the balenaOS host image
 is managed separately.
 
-Three services are deployed to the balenaCloud fleet `g_potlog_radu/rovera1`.
+Four services are deployed to the balenaCloud fleet `g_potlog_radu/rovera1`.
 Each has its own folder holding its Dockerfile and any scripts, which is the
 service's build context in `docker-compose.yml`:
 
 | Service            | Folder              | Contents                                                                   |
 |--------------------|---------------------|----------------------------------------------------------------------------|
-| `rovera1-app`      | `rovera1_app/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
+| `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
+| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`); `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 diagnostics web page on port 9091 (no ROS inside; the browser reads diagnostics from foxglove_bridge) |
 
 ```
 rover_docker/
 ├── docker-compose.yml
-├── rovera1_app/
+├── rover_a1_platform/
+│   ├── Dockerfile
+│   └── start.sh
+├── rover_a1_orchestrator/
 │   ├── Dockerfile
 │   └── start.sh
 ├── rover_web_server/
@@ -35,12 +39,15 @@ Run commands from `rover_docker/`. Use a Docker Buildx builder that supports
 Desktop integration for the distribution first.
 
 ```bash
-bash -n rovera1_app/start.sh
+bash -n rover_a1_platform/start.sh
+bash -n rover_a1_orchestrator/start.sh
 bash -n rover_cockpit/start.sh
 docker compose config --quiet
 docker buildx inspect --bootstrap
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
-  -t rovera1-app:lyrical ./rovera1_app
+  -t rover-a1-platform:lyrical ./rover_a1_platform
+docker buildx build --platform linux/arm64 --pull --no-cache --load \
+  -t rover-a1-orchestrator:lyrical ./rover_a1_orchestrator
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-web-server:lyrical ./rover_web_server
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
@@ -57,7 +64,7 @@ Check the built image without starting hardware bringup:
 
 ```bash
 docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
-  rovera1-app:lyrical -ec '
+  rover-a1-platform:lyrical -ec '
     test "$(dpkg --print-architecture)" = arm64
     test "$ROS_DISTRO" = lyrical
     source /opt/ros/$ROS_DISTRO/setup.bash
@@ -65,6 +72,24 @@ docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
     for package in rover_bringup rmw_zenoh_cpp rosbridge_server rosapi foxglove_bridge; do
       ros2 pkg prefix "$package"
     done
+  '
+```
+
+The orchestrator image builds `rover_orchestrator` (plus the parts of `rover_ros` it
+depends on) with `colcon build --packages-up-to rover_autonomy`, so the hardware packages
+are never compiled there. Check it the same way:
+
+```bash
+docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
+  rover-a1-orchestrator:lyrical -ec '
+    test "$(dpkg --print-architecture)" = arm64
+    source /opt/ros/$ROS_DISTRO/setup.bash
+    source /root/ros2_ws/rover_a1/install/setup.bash
+    for package in rover_autonomy rover_navigation rover_mission_manager \
+                   nav2_bringup slam_toolbox spatio_temporal_voxel_layer rmw_zenoh_cpp; do
+      ros2 pkg prefix "$package"
+    done
+    ros2 launch rover_navigation bringup.launch.py --show-args > /dev/null
   '
 ```
 
@@ -91,18 +116,30 @@ balena push g_potlog_radu/rovera1 --nocache
 ```
 
 `--nocache` matters: every service fetches its application source with
-`git clone` during the build (`rover_ros`, `rover_networking_web_server` and
-`rover_cockpit_ros2_diagnostics` respectively). Those clones sit in cached layers, so a plain `balena push`
-will happily ship stale application code.
+`git clone` during the build (`rover_ros`; `rover_ros` + `rover_orchestrator`;
+`rover_networking_web_server`; and `rover_cockpit_ros2_diagnostics` respectively). Those
+clones sit in cached layers, so a plain `balena push` will happily ship stale application
+code.
 
 Select specific application commits instead of branch tips with:
 
 ```bash
 balena push g_potlog_radu/rovera1 \
   --build-arg ROVER_ROS_REF=<sha> \
+  --build-arg ROVER_ORCHESTRATOR_REF=<sha> \
   --build-arg ROVER_WEB_REF=<sha> \
   --build-arg ROVER_COCKPIT_REF=<sha>
 ```
+
+`ROVER_ROS_REF` is consumed by both `rover-a1-platform` and `rover-a1-orchestrator`, so the
+two stay on the same `rover_ros` commit.
+
+> **Renaming note.** `rover-a1-platform` was previously the service `rovera1-app`. balena
+> treats a renamed service as a new one, so any *service-scoped* device or fleet variable
+> that was set on `rovera1-app` no longer applies. Re-create them against
+> `rover-a1-platform` (`balena env set … --service rover-a1-platform`) or promote them to
+> all-services variables. The old service and its image are removed from the device on the
+> next push.
 
 Use a Lyrical-compatible commit for `ROVER_ROS_REF`. These overrides pin
 only the application repositories: imported dependency branches, base
@@ -128,7 +165,7 @@ image, set a balenaCloud variable:
 Other service variables: `ROVER_WEB_PORT` (default `8080` in the app, set to
 `80` in `docker-compose.yml`), `ROVER_WEB_POLL_INTERVAL_SECONDS`,
 `ROVER_WEB_PING_TIMEOUT_SECONDS`, `ROVER_WEB_FOXGLOVE_URL` (default
-`ws://127.0.0.1:8765`, the foxglove_bridge in `rovera1-app`; the `/led` page
+`ws://127.0.0.1:8765`, the foxglove_bridge in `rover-a1-platform`; the `/led` page
 reads the LED animation state through it).
 
 ## Ports
@@ -137,13 +174,16 @@ All containers use host networking, so these bind directly to the device:
 
 | Port   | Service                        |
 |--------|--------------------------------|
-| 22     | sshd (`rovera1-app`)           |
+| 22     | sshd (`rover-a1-platform`)           |
 | 80     | network dashboard              |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) |
 | 9091   | Cockpit ROS 2 diagnostics (`rover-cockpit`) |
 | 48484  | balena supervisor              |
+
+`rover-a1-orchestrator` opens no port of its own: it joins the existing Zenoh router on
+7447 as a session (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
 
 ## ROS 2 diagnostics (Cockpit)
 
@@ -157,7 +197,7 @@ log in, and the diagnostics page opens directly.
   `ROVER_COCKPIT_USER` (default `rover`; `root` is refused). Both are re-applied on
   every container start.
 - **Data path:** the page runs in the browser and connects straight to
-  `ws://<same host>:8765` (foxglove_bridge in `rovera1-app`), subscribing to
+  `ws://<same host>:8765` (foxglove_bridge in `rover-a1-platform`), subscribing to
   `/rover/diagnostics_agg` (`<ROVER_NAMESPACE>/diagnostics_agg`; the container
   writes the namespace to `/etc/clearpath/robot.yaml`, where the plugin reads it).
   That topic is published by the `rover_diagnostic_aggregator`
@@ -168,45 +208,122 @@ log in, and the diagnostics page opens directly.
   connection from an https page), and the balena Public Device URL proxies only
   port 80, not 9091 or 8765.
 - The container needs no ROS, no privileges and no Zenoh access; if the page
-  shows "disconnected", check foxglove_bridge on port 8765 in `rovera1-app`.
+  shows "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`.
 
 ## Device variables
 
-`rovera1-app` reads these from the environment. Defaults come from `docker-compose.yml` or
-`start.sh`. Override them per device (balenaCloud → device → **Device Variables**) or per fleet
-(**Fleet Variables**):
+Every variable below is declared on **every** service in `docker-compose.yml`, so a fleet or
+device variable reaches whichever container reads it. The *read by* column names the services
+that actually act on the value; the others simply carry it. Defaults come from
+`docker-compose.yml` or from each service's `start.sh`. Override them per device
+(balenaCloud → device → **Device Variables**) or per fleet (**Fleet Variables**).
 
-| Variable | Default | Effect |
-|----------|---------|--------|
-| `ROVER_START_BRINGUP` | `true` | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. |
-| `ROVER_USE_GPS` | `false` | Localization mode. `false`: EKF on wheel odometry + IMU. `true`: also fuses the RUTX11 GPS (`rover_gps` heading alignment, `navsat_transform`, global EKF publishing `map → odom`). Accepts `true`/`1`/`yes`/`on` (any case); anything else means false. The GPS driver and its diagnostics run in both modes. |
-| `ROVER_NAMESPACE` | `rover` | ROS namespace (see below). Keep it equal for `rover-web-server` and `rover-cockpit`. |
-| `ROVER_LAN_IP` | `192.168.1.201` | Rover LAN address the Zenoh router binds. |
+Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
+
+### Stack toggles
+
+| Variable | Default | Read by | Effect |
+|----------|---------|---------|--------|
+| `ROVER_START_BRINGUP` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
+| `ROVER_START_NAV_BRINGUP` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2). Requires `ROVER_START_BRINGUP=true` and `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=false`. |
+| `ROVER_START_MISSION_MANAGER` | `true` | orchestrator | `false` runs Nav 2 without `rover_mission_manager`. Only consulted when the orchestrator stack starts at all. |
+| `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER` | `false` | orchestrator | `true` means a separate companion controller runs the autonomy stack, so `rover-a1-orchestrator` idles on this device. |
+
+### Robot configuration
+
+| Variable | Default | Read by | Effect |
+|----------|---------|---------|--------|
+| `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
+| `ROVER_USE_GPS` | `false` | platform, orchestrator | Localization mode. `false`: EKF on wheel odometry + IMU. `true`: also fuses the RUTX11 GPS (`rover_gps` heading alignment, `navsat_transform`, global EKF publishing `map → odom`). The GPS driver and its diagnostics run in both modes. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
+| `ROVER_USE_LIDAR` | `false` | platform, orchestrator | Starts the RoboSense RS16 driver. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
+| `ROVER_LAN_IP` | `192.168.1.201` | platform | Rover LAN address the Zenoh router binds. |
+| `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps` or `slam`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox) requires `ROVER_USE_GPS=false` — exactly one process may publish `map → odom`. An unrecognized value is ignored with a warning. |
+| `ROVER_NAV_MAP` | *(unset)* | orchestrator | Optional path to a map yaml inside the container; defaults to `rover_navigation`'s `empty_world.yaml`. |
+
+### Sensor mount poses
+
+Read by `rover_description` in `rover-a1-platform`, relative to `body_link`
+(x forward, y left, z up). Declared in `docker-compose.yml` but left **unset**, so the URDF
+defaults apply until a balenaCloud variable defines one. A non-numeric value is ignored with a
+warning in `/tmp/rover_bringup.log`.
+
+| Variable | Default |
+|----------|---------|
+| `ROVER_IMU_LOCALIZATION_X` / `_Y` / `_Z` [m] | `-0.09` / `0.0` / `0.2` |
+| `ROVER_IMU_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
+| `ROVER_GPS_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0` |
+| `ROVER_GPS_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
+| `ROVER_LIDAR_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0` |
+| `ROVER_LIDAR_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
+
+### Cockpit login
+
+| Variable | Default | Read by | Effect |
+|----------|---------|---------|--------|
+| `ROVER_COCKPIT_USER` | `rover` | cockpit | Cockpit login user. `root` is refused. |
+| `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — `rover-cockpit` exits with an error without it. |
+| `ROVER_COCKPIT_PORT` | `9091` | cockpit | Port the Cockpit web console binds. |
 
 ```bash
-balena env set ROVER_START_BRINGUP false --device <device-uuid> --service rovera1-app
+balena env set ROVER_START_BRINGUP false --device <device-uuid> --service rover-a1-platform
+balena env set ROVER_START_NAV_BRINGUP true --device <device-uuid> --service rover-a1-orchestrator
 ```
 
 Changing a variable restarts the affected containers automatically, and `start.sh` re-reads
 the value on the next start. There is no image rebuild, but expect roughly 15–30 s of downtime
-for `rovera1-app`, with its web bridges down during that time. A variable scoped to the
-`rovera1-app` service restarts only that service; an all-services device variable restarts
-every service.
+for `rover-a1-platform`, with its web bridges down during that time. A variable scoped to one
+service restarts only that service; an all-services device variable restarts every service.
+
+Note that `ROVER_START_BRINGUP` is read by two services. Scoping it to `rover-a1-platform`
+alone stops the bringup but leaves the orchestrator believing it is still running — set it as
+an all-services variable, or set `ROVER_START_NAV_BRINGUP=false` alongside it.
+
+## Where the orchestrator runs
+
+`rover-a1-orchestrator` holds the autonomy stack from
+[`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator): `rover_navigation`
+(Nav 2 configuration — costmaps, MPPI controller, Smac 2D planner, behavior trees, map
+server, SLAM map autosaver) and `rover_mission_manager` (behavior-tree mission supervision
+dispatching Nav 2 actions).
+
+It starts that stack only when **all three** hold:
+
+| `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER` | `ROVER_START_BRINGUP` | `ROVER_START_NAV_BRINGUP` | Result |
+|---|---|---|---|
+| `false` | `true` | `true` | Nav 2 starts (+ mission manager unless `ROVER_START_MISSION_MANAGER=false`) |
+| `false` | `true` | `false` | idle — navigation not requested |
+| `false` | `false` | *any* | idle — no platform bringup to navigate with |
+| `true` | *any* | *any* | idle — the stack runs on a companion controller |
+
+When idle the container does **not** exit — it sleeps, so `restart: always` cannot crash-loop
+it, and the balena logs carry a single line naming the reason. Changing any of the variables
+restarts the container, which re-evaluates them.
+
+With `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=true`, build and run `rover_autonomy` on the
+companion computer instead and join the rover's Zenoh router over the rover LAN (see
+[ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)). Keep `ROVER_NAMESPACE` and the
+chosen `localization_source` identical on both sides.
+
+The container runs no Zenoh router of its own: host networking puts it in the same network
+namespace as `rover-a1-platform`, so `rmw_zenoh_cpp` connects to `tcp/127.0.0.1:7447`.
+`start.sh` waits up to 60 s for that port before launching, because balena does not order
+service startup.
 
 ## ROS namespace
 
-`rovera1-app` runs every rover node under the namespace in `ROVER_NAMESPACE`
+`rover-a1-platform` runs every rover node under the namespace in `ROVER_NAMESPACE`
 (default `rover`, set in `docker-compose.yml`, overridable as a balenaCloud
 variable), so rover topics and services are `/rover/cmd_vel`,
 `/rover/odom`, `/rover/led/state`, `/rover/hardware_interface/gpio_state`, …
 and TF frames are `rover/odom`, `rover/base_link`. `/tf`, `/tf_static`,
 `/rosout` and `/parameter_events` stay global, as do the web bridges
-(`/rosapi/*`, `/client_count`). `rover-web-server` and `rover-cockpit` read the
-same variable, so change it on all three services together.
+(`/rosapi/*`, `/client_count`). `rover-a1-orchestrator`, `rover-web-server` and
+`rover-cockpit` read the same variable, so change it on all four services together — an
+all-services balenaCloud variable is the safe way to do that.
 
 ## ROS 2 over the rover LAN (Zenoh)
 
-The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router in `rovera1-app`
+The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router in `rover-a1-platform`
 listens on loopback and on the rover LAN address only (default
 `192.168.1.201`, override with the balenaCloud variable `ROVER_LAN_IP`).
 balenaVPN and GSM are deliberately not bound. The router has no

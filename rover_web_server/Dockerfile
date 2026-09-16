@@ -11,7 +11,7 @@ RUN apt-get update \
 # Tracks the tip of `master` by default, so every `balena push --nocache` picks
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_WEB_REF=<sha>` for a reproducible build instead.
-# Same convention as ROVER_ROS_REF in rovera1_app/Dockerfile.
+# Same convention as ROVER_ROS_REF in rover_a1_platform/Dockerfile.
 ARG ROVER_WEB_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_networking_web_server.git /src \
     && git -C /src checkout ${ROVER_WEB_REF} \
