@@ -78,7 +78,9 @@ services:
     restart: always
     # The Zenoh router lives in rover-a1-platform. Host mode puts this container on the same
     # network namespace, so rmw_zenoh_cpp joins the ROS 2 graph at tcp/127.0.0.1:7447 without
-    # a second router and without opening any port of its own.
+    # a second router. The only port this service opens is 2222 for its own sshd - 22 belongs
+    # to rover-a1-platform's, and host mode means the two share one port space. No `ports:`
+    # mapping: host networking binds 2222 straight to the device's interfaces.
     network_mode: host
     environment:
       # Namespace of the Nav 2 / mission-manager nodes (must match rover-a1-platform).

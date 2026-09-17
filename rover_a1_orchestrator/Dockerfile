@@ -3,8 +3,10 @@
 # Sibling of rover-a1-platform. That image owns the hardware (drivers, controllers,
 # localization, safety) and runs the Zenoh router; this one owns navigation only and joins
 # that router over host networking. Everything hardware-specific - rover_modbus,
-# rover_cppuprofile, libpcap, dbus, sshd, the Claude Code / ros-mcp tooling - is deliberately
-# absent here.
+# rover_cppuprofile, libpcap, dbus, the Claude Code / ros-mcp tooling - is deliberately
+# absent here. An sshd is the one exception, and it listens on 2222 rather than 22: host
+# networking puts this container in rover-a1-platform's network namespace, where that image's
+# sshd already owns 22.
 FROM ubuntu:26.04
 
 # Avoid interactive prompts during build
@@ -15,6 +17,34 @@ RUN apt-get update && apt-get install -y \
     curl wget gnupg2 lsb-release software-properties-common \
     build-essential git locales \
     && rm -rf /var/lib/apt/lists/*
+
+##################################### SSH ################################################
+
+# Installed above the workspace layers on purpose: the git clone / rosdep / colcon build
+# steps below are the expensive ones, so keeping sshd out of that churn preserves the cache.
+#
+# Port 2222, not 22: every service in docker-compose.yml is network_mode: host, so this
+# container shares one port space with rover-a1-platform, whose sshd already binds 22.
+RUN apt-get update && apt-get install -y openssh-server \
+    && mkdir -p /var/run/sshd \
+    && rm -rf /var/lib/apt/lists/*
+
+# Root password login, the same arrangement rover-a1-platform uses (`root:root`,
+# PermitRootLogin yes, UsePAM no) so both containers are reached the same way - only the port
+# differs. See README.md "Orchestrator SSH" for the exposure this carries on the rover LAN.
+#
+# A drop-in rather than rover-a1-platform's sed edits: Ubuntu's stock sshd_config starts with
+# `Include /etc/ssh/sshd_config.d/*.conf`, so this wins without depending on the exact
+# commented-out text surviving an Ubuntu package update.
+RUN echo 'root:root' | chpasswd \
+    && printf 'Port 2222\nPermitRootLogin yes\nUsePAM no\n' \
+       > /etc/ssh/sshd_config.d/rover_orchestrator.conf
+
+# Documentation only - host networking ignores EXPOSE. Kept for parity with
+# rover-a1-platform's `EXPOSE 22`.
+EXPOSE 2222
+
+##########################################################################################
 
 RUN add-apt-repository universe
 

@@ -11,7 +11,7 @@ service's build context in `docker-compose.yml`:
 | Service            | Folder              | Contents                                                                   |
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
-| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`); `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
+| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 diagnostics web page on port 9091 (no ROS inside; the browser reads diagnostics from foxglove_bridge) |
 
@@ -175,6 +175,7 @@ All containers use host networking, so these bind directly to the device:
 | Port   | Service                        |
 |--------|--------------------------------|
 | 22     | sshd (`rover-a1-platform`)           |
+| 2222   | sshd (`rover-a1-orchestrator`)       |
 | 80     | network dashboard              |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
@@ -182,8 +183,41 @@ All containers use host networking, so these bind directly to the device:
 | 9091   | Cockpit ROS 2 diagnostics (`rover-cockpit`) |
 | 48484  | balena supervisor              |
 
-`rover-a1-orchestrator` opens no port of its own: it joins the existing Zenoh router on
-7447 as a session (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
+`rover-a1-orchestrator` opens one port of its own, 2222, for its sshd — 22 belongs to
+`rover-a1-platform`, and host networking gives the two containers a single port space. It
+runs **no Zenoh router** of its own, joining the existing one on 7447 as a session (see
+[ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
+
+That sshd takes the same credentials as `rover-a1-platform`'s — root password login, baked
+into the image. Only the port differs: `ssh -p 2222 root@<rover-lan-ip>`. See
+[Orchestrator SSH](#orchestrator-ssh).
+
+## Orchestrator SSH
+
+`rover-a1-orchestrator` runs its own sshd on **2222**, configured in the image
+(`rover_a1_orchestrator/Dockerfile`) exactly as `rover-a1-platform`'s is on 22 — `root:root`,
+`PermitRootLogin yes`, `UsePAM no` — through a `/etc/ssh/sshd_config.d/` drop-in.
+
+```bash
+ssh -p 2222 root@<rover-lan-ip>     # orchestrator: Nav 2 + mission manager
+ssh root@<rover-lan-ip>             # platform: drivers, Zenoh router, bringup
+```
+
+`start.sh` starts sshd ahead of the enable/disable gate, so the container is reachable even
+when the autonomy stack is idling — which is when a shell is most useful. sshd is supervised
+alongside Nav 2: if it dies the service tears down and `restart: always` brings it back.
+
+Two caveats, both inherited from `rover-a1-platform` and neither specific to this port:
+
+- The password is the image default. Anything that can reach the rover LAN can reach both
+  shells, so treat that LAN as the security boundary, and change the password in the
+  Dockerfile before any deployment that is not on a trusted network.
+- Host keys are generated when `openssh-server` installs at **build** time, so every device
+  from one image build shares them. Regenerating per device (`rm -f /etc/ssh/ssh_host_*` in
+  the Dockerfile plus `ssh-keygen -A` in `start.sh`) is the fix if that matters.
+
+Neither is a regression — it is the arrangement port 22 has always had — but 2222 doubles the
+surface, so it is worth stating.
 
 ## ROS 2 diagnostics (Cockpit)
 
@@ -296,8 +330,9 @@ It starts that stack only when **all three** hold:
 | `true` | *any* | *any* | idle — the stack runs on a companion controller |
 
 When idle the container does **not** exit — it sleeps, so `restart: always` cannot crash-loop
-it, and the balena logs carry a single line naming the reason. Changing any of the variables
-restarts the container, which re-evaluates them.
+it, and the balena logs carry a single line naming the reason. sshd starts ahead of that
+gate, so an idle container is still reachable on 2222 — which is when a shell tends to be
+most useful. Changing any of the variables restarts the container, which re-evaluates them.
 
 With `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=true`, build and run `rover_autonomy` on the
 companion computer instead and join the rover's Zenoh router over the rover LAN (see

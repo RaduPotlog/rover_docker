@@ -15,6 +15,17 @@ terminate_children() {
 # of only whichever one happens to be PID 1.
 trap 'terminate_children; exit 0' TERM INT
 
+# **SSHD background (keep alive)** - started before the enable/disable gate below, because a
+# shell is most useful exactly when the orchestrator is idling and there is no Nav 2 to
+# inspect. Credentials are the image's (root password), as in rover-a1-platform.
+#
+# Port 2222 (set in the image's sshd_config drop-in), not 22: host networking shares one port
+# space with rover-a1-platform, whose sshd owns 22.
+/usr/sbin/sshd -D &
+SSHD_PID=$!
+CHILD_PIDS+=("$SSHD_PID")
+echo "sshd started on port 2222 (PID: $SSHD_PID)"
+
 # Normalize a balenaCloud boolean the same way rover-a1-platform's start.sh does: unset or
 # empty falls back to $2, and anything that is not true/1/yes/on (any case) is false.
 norm_bool() {
@@ -52,8 +63,12 @@ fi
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them here.
 if [ "$START_ORCHESTRATOR" != true ]; then
-  echo "Orchestrator stack disabled: ${DISABLED_REASON}; idling"
-  exec sleep infinity
+  echo "Orchestrator stack disabled: ${DISABLED_REASON}; idling (sshd on 2222 stays up)"
+  # Not `exec sleep infinity` here: exec would replace this shell, dropping the TERM trap and
+  # orphaning sshd. Waiting on sshd idles just as well and keeps signals forwarded.
+  wait "$SSHD_PID" || true
+  terminate_children
+  exit 0
 fi
 
 # Nav 2's global frame owner. ROVER_USE_GPS decides it by default - 'gps' means
@@ -149,7 +164,7 @@ fi
 wait -n "${CHILD_PIDS[@]}"
 EXIT_CODE=$?
 
-STATUS_ENTRIES=("rover_navigation:$NAV_PID")
+STATUS_ENTRIES=("sshd:$SSHD_PID" "rover_navigation:$NAV_PID")
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
   STATUS_ENTRIES+=("rover_mission_manager:$MISSION_PID")
 fi
