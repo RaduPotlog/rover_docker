@@ -12,6 +12,7 @@ FROM ubuntu:26.04
 # Avoid interactive prompts during build
 ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO=lyrical
+ENV ROVER_ROS_BUILD_TYPE=hardware
 
 RUN apt-get update && apt-get install -y \
     curl wget gnupg2 lsb-release software-properties-common \
@@ -93,6 +94,7 @@ RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orc
 
 # pointcloud_crop_box - the self-filter for rover_navigation's `pointcloud` observation path.
 # Source-only, so it cannot come from rosdep.
+RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
 RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos
 
 RUN rosdep init
@@ -110,10 +112,7 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # reaches dies on `E: Unable to locate package ros-${ROS_DISTRO}-...` and takes the build with
 # it. Same RUN rather than a separate update layer, so the two can never cache out of step.
 RUN apt-get update \
-    && rosdep install -y -i --rosdistro "${ROS_DISTRO}" \
-       --from-paths src/rover_orchestrator \
-                    src/rover_ros/rover_utils \
-                    src/rover_pointcloud_crop_box \
+    && rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i \
     && rm -rf /var/lib/apt/lists/*
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
