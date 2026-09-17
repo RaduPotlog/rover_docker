@@ -114,11 +114,16 @@ RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y usbutils plocate \
     && rm -rf /var/lib/apt/lists/*
 RUN add-apt-repository universe
-RUN apt-get update
 RUN rosdep init
 ENV ROVER_ROS_BUILD_TYPE=hardware
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
-RUN rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i
+# apt-get update belongs in this same RUN. rosdep does not refresh the apt index itself - it
+# shells out to a bare `apt-get install -y <pkg>`, once per package - so it needs lists that
+# some earlier layer happened to leave behind. Keeping the update here makes this layer
+# self-contained instead of depending on whichever apt layer above it skipped its cleanup.
+RUN apt-get update \
+    && rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i \
+    && rm -rf /var/lib/apt/lists/*
 # rover_safety powers off the ROS controller with dbus-send (systemd-logind over the host D-Bus
 # socket, io.balena.features.dbus) when the balena Supervisor API is unavailable. dbus has no
 # rosdep key, so it is installed here.

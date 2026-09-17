@@ -103,10 +103,18 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # [rover_rslidar_sdk], and would drag in the hardware stack we are trying to leave out.
 # src/rover_pointcloud_crop_box must stay listed so -i ignores its `pointcloud_crop_box` key.
 # Pulls the Nav 2 stack, slam_toolbox, spatio_temporal_voxel_layer and behaviortree_cpp.
-RUN rosdep install -y -i --rosdistro "${ROS_DISTRO}" \
-    --from-paths src/rover_orchestrator \
-                 src/rover_ros/rover_utils \
-                 src/rover_pointcloud_crop_box
+#
+# apt-get update belongs in this same RUN: the ros-base layer above ends with
+# `rm -rf /var/lib/apt/lists/*`, and rosdep does not refresh the index itself - it shells out
+# to a bare `apt-get install -y <pkg>`, once per package. With no lists the first package it
+# reaches dies on `E: Unable to locate package ros-${ROS_DISTRO}-...` and takes the build with
+# it. Same RUN rather than a separate update layer, so the two can never cache out of step.
+RUN apt-get update \
+    && rosdep install -y -i --rosdistro "${ROS_DISTRO}" \
+       --from-paths src/rover_orchestrator \
+                    src/rover_ros/rover_utils \
+                    src/rover_pointcloud_crop_box \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --symlink-install --packages-up-to rover_autonomy \
