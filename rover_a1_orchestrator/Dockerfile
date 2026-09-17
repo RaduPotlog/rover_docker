@@ -129,7 +129,27 @@ RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orc
 # pointcloud_crop_box - the self-filter for rover_navigation's `pointcloud` observation path.
 # Source-only, so it cannot come from rosdep.
 RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
-RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos
+
+# autonomy_deps.repos also pins navigation2, for nav2_smac_planner - planner_server's
+# GridBased plugin, and the one nav2_* package with no arm64 binary on lyrical/resolute.
+# vcstool cannot express a sparse checkout, so prune the import down to that single package.
+#
+# Mandatory, not an optimization, for two independent reasons:
+#   - rosdep resolves the `nav2_smac_planner` key to ros-${ROS_DISTRO}-nav2-smac-planner,
+#     which does not exist on arm64. The -i below only skips it because the package is
+#     present in src/, so without this checkout the rosdep layer fails outright.
+#   - `--packages-up-to rover_autonomy` follows rover_navigation's exec_depends. Unpruned,
+#     colcon finds 46 packages in this import instead of 1, so it rebuilds the whole Nav 2
+#     stack from source on top of the debs, and rosdep resolves those packages' deps rather
+#     than installing the debs at all - measured: ros-gz-bridge, nav2-minimal-tb3-sim,
+#     nav2-minimal-tb4-sim and qt6-scxml-dev, in an image with no GUI and no simulator.
+#
+# src/navigation2, not src/third_party/navigation2: vcs import derives the directory from the
+# .repos key. Folded into the same RUN as the import because Docker layers are additive -
+# pruning in a later layer would leave the full tree committed in this one and reclaim nothing.
+RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos \
+    && git -C src/navigation2 sparse-checkout init --cone \
+    && git -C src/navigation2 sparse-checkout set nav2_smac_planner
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
@@ -139,6 +159,8 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # [rover_rslidar_sdk], and would drag in the hardware stack we are trying to leave out.
 # src/rover_pointcloud_crop_box must stay listed so -i ignores its `pointcloud_crop_box` key.
 # Pulls the Nav 2 stack, slam_toolbox, spatio_temporal_voxel_layer and behaviortree_cpp.
+# nav2_smac_planner is the one exception: -i skips it because the pruned checkout above
+# put it in src/, and colcon builds it from source instead.
 #
 # apt-get update belongs in this same RUN: the ros-base layer above ends with
 # `rm -rf /var/lib/apt/lists/*`, and rosdep does not refresh the index itself - it shells out
