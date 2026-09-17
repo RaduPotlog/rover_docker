@@ -161,8 +161,12 @@ fi
 # **Supervise** - block until the first of the supervised processes exits (crash or
 # otherwise), then tear down everything else and exit so docker-compose's `restart: always`
 # (Balena) brings the whole stack back up cleanly.
-wait -n "${CHILD_PIDS[@]}"
-EXIT_CODE=$?
+#
+# `|| EXIT_CODE=$?` rather than a bare `wait -n`: this script runs under `bash -e`, so a
+# child exiting non-zero - the crash case this block exists to report - would otherwise kill
+# the shell here, skipping the teardown and the log line naming what died.
+EXIT_CODE=0
+wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
 STATUS_ENTRIES=("sshd:$SSHD_PID" "rover_navigation:$NAV_PID")
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then

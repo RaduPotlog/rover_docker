@@ -149,8 +149,13 @@ echo "Web bridges (foxglove_bridge, rosbridge) started (PID: $BRIDGES_PID)"
 # dead component nobody notices, tear down everything else and exit so
 # docker-compose's `restart: always` (Balena) brings the whole stack back
 # up cleanly.
-wait -n "${CHILD_PIDS[@]}"
-EXIT_CODE=$?
+#
+# `|| EXIT_CODE=$?` rather than a bare `wait -n`: this script runs
+# under `bash -e`, so a child exiting non-zero - the crash case this
+# block exists to report - would otherwise kill the shell here,
+# skipping the teardown and the log line naming what died.
+EXIT_CODE=0
+wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
 STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "web_bridges:$BRIDGES_PID")
 if [ "$ROVER_START_BRINGUP" = true ]; then
