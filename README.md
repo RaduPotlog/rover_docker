@@ -11,7 +11,7 @@ service's build context in `docker-compose.yml`:
 | Service            | Folder              | Contents                                                                   |
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
-| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
+| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 diagnostics web page on port 9091 (no ROS inside; the browser reads diagnostics from foxglove_bridge) |
 
@@ -179,7 +179,7 @@ All containers use host networking, so these bind directly to the device:
 | 80     | network dashboard              |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
-| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) |
+| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **both** ROS services |
 | 9091   | Cockpit ROS 2 diagnostics (`rover-cockpit`) |
 | 48484  | balena supervisor              |
 
@@ -218,6 +218,23 @@ Two caveats, both inherited from `rover-a1-platform` and neither specific to thi
 
 Neither is a regression — it is the arrangement port 22 has always had — but 2222 doubles the
 surface, so it is worth stating.
+
+### Claude Code on the 2222 shell
+
+The orchestrator image carries the same Claude tooling as `rover-a1-platform` — the
+`@anthropic-ai/claude-code` CLI plus `ros-mcp`, registered at user scope at build time — so
+`claude` works identically on either shell. Run it from the 2222 session when the thing you
+are debugging is Nav 2, the costmaps or the mission manager.
+
+- **One-time login.** `claude` prompts for authentication on first run. The credential is
+  written to `/root/.claude.json` **inside the container**, so it does not survive a container
+  recreate — every balena release means logging in again. If that friction bites, declare an
+  unset `ANTHROPIC_API_KEY` on both ROS services in `docker-compose.yml` and set it as a
+  balenaCloud variable instead.
+- **ros-mcp needs `rover-a1-platform` running.** It reaches rosbridge at `127.0.0.1:9090`,
+  which is served by that container — host networking gives the two services one namespace,
+  which is why the orchestrator runs no rosbridge of its own. With the platform stopped,
+  `claude mcp list` shows ros-mcp failing to connect.
 
 ## ROS 2 diagnostics (Cockpit)
 
