@@ -131,81 +131,26 @@ services:
       # Carried for completeness; read by rover-cockpit.
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
-  rover-web-server:
-    build:
-      context: ./rover_web_server
-    restart: always
-    # The monitored addresses (192.168.1.0/24, 192.168.77.0/24,
-    # 192.168.88.0/24, 172.22.100.97) are rover-local segments that bridged
-    # networking would not reach. Host mode also means no port mapping is
-    # needed - port 80 binds straight to the device's interfaces.
-    network_mode: host
-    # ICMP needs CAP_NET_RAW. Docker grants it by default; declaring it keeps
-    # the service working under a hardened profile without needing the
-    # `privileged: true` that rover-a1-platform requires.
-    cap_add:
-      - NET_RAW
-    environment:
-      # Port 80 so the balenaCloud Public Device URL reaches the dashboard.
-      ROVER_WEB_PORT: '80'
-      ROVER_WEB_POLL_INTERVAL_SECONDS: '5'
-      ROVER_WEB_PING_TIMEOUT_SECONDS: '1'
-      # Namespace of the LED topics (must match rover-a1-platform).
-      ROVER_NAMESPACE: 'rover'
-      # Carried for completeness; acted on by the services named in README.md.
-      ROVER_START_BRINGUP: 'true'
-      ROVER_START_NAV_BRINGUP: 'false'
-      ROVER_START_MISSION_MANAGER: 'true'
-      ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_COCKPIT_USER: 'rover'
-      ROVER_COCKPIT_PASSWORD:
-    # curl is absent from node:24-slim, hence the node one-liner (global fetch).
-    # start_period covers the initial full ping sweep the server completes
-    # before it starts listening.
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
   rover-cockpit:
     build:
       context: ./rover_cockpit
     restart: always
     # The Cockpit plugin tells the browser to open ws://<same host>:8765
     # (foxglove_bridge in rover-a1-platform), so the page must be reached on the
-    # rover's own address - host mode, no port mapping. Host mode also lets the
-    # ROS 2 Networking tab ping the rover-local segments (192.168.1.0/24,
-    # 192.168.77.0/24, 192.168.88.0/24).
+    # rover's own address - host mode, no port mapping: port 80 binds straight
+    # to the device's interfaces. Host mode also lets the ROS 2 Networking tab
+    # ping the rover-local segments (192.168.1.0/24, 192.168.77.0/24,
+    # 192.168.88.0/24, 172.22.100.97).
     network_mode: host
     # The ROS 2 Networking tab runs `ping`, which needs CAP_NET_RAW. Docker
     # grants it by default; declaring it keeps the tab working under a hardened
-    # profile (same as rover-web-server).
+    # profile without needing the `privileged: true` that rover-a1-platform requires.
     cap_add:
       - NET_RAW
     environment:
+      # Plain http on port 80 (no TLS for now, see rover_cockpit/cockpit.conf).
       # 9090 is rosbridge in rover-a1-platform.
-      ROVER_COCKPIT_PORT: '9091'
+      ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       # ROVER_COCKPIT_PASSWORD has no default: set it as a balenaCloud service
       # variable, or the container exits with an error.
@@ -238,7 +183,9 @@ services:
       ROVER_LIDAR_ORIENTATION_P:
       ROVER_LIDAR_ORIENTATION_Y:
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9091/ping"]
+      # $$ defers expansion to the container, so a changed ROVER_COCKPIT_PORT
+      # variable is followed.
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${ROVER_COCKPIT_PORT:-80}/ping"]
       interval: 30s
       timeout: 5s
       start_period: 10s

@@ -3,7 +3,7 @@
 # Cockpit login account for the ROS 2 diagnostics page. The password has no
 # default on purpose: set ROVER_COCKPIT_PASSWORD as a balenaCloud service variable.
 ROVER_COCKPIT_USER=${ROVER_COCKPIT_USER:-rover}
-ROVER_COCKPIT_PORT=${ROVER_COCKPIT_PORT:-9091}
+ROVER_COCKPIT_PORT=${ROVER_COCKPIT_PORT:-80}
 
 if [ -z "${ROVER_COCKPIT_PASSWORD:-}" ]; then
   echo "ERROR: ROVER_COCKPIT_PASSWORD is not set. Set it as a balenaCloud service variable for rover-cockpit; refusing to start without a login password."

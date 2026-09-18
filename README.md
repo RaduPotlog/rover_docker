@@ -12,8 +12,7 @@ service's build context in `docker-compose.yml`:
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
-| `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
-| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 9091 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
+| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
 
 ```
 rover_docker/
@@ -24,8 +23,6 @@ rover_docker/
 ├── rover_a1_orchestrator/
 │   ├── Dockerfile
 │   └── start.sh
-├── rover_web_server/
-│   └── Dockerfile
 └── rover_cockpit/
     ├── Dockerfile
     ├── cockpit.conf
@@ -48,8 +45,6 @@ docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-a1-platform:lyrical ./rover_a1_platform
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-a1-orchestrator:lyrical ./rover_a1_orchestrator
-docker buildx build --platform linux/arm64 --pull --no-cache --load \
-  -t rover-web-server:lyrical ./rover_web_server
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-cockpit:lyrical ./rover_cockpit
 ```
@@ -106,9 +101,9 @@ docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
 Before deployment, smoke-test `rmw_zenohd`, rosbridge, and Foxglove in an
 isolated container with the entrypoint overridden (no hardware bringup),
 and check workspace shared libraries with `ldd` for missing dependencies.
-Verify the web image's `/healthz` endpoint returns success. Start the Cockpit
+Start the Cockpit
 image with `-e ROVER_COCKPIT_PASSWORD=<test> --network host`, check
-`curl -fsS http://127.0.0.1:9091/ping`, and log in at `http://localhost:9091`;
+`curl -fsS http://127.0.0.1/ping`, and log in at `http://localhost/`;
 without `ROVER_COCKPIT_PASSWORD` it must exit with an error. On the rover,
 verify hardware bringup, the LAN Zenoh connection, and bridge ports after
 deployment. A successful image build alone does not validate hardware.
@@ -127,7 +122,7 @@ balena push g_potlog_radu/rovera1 --nocache
 
 `--nocache` matters: every service fetches its application source with
 `git clone` during the build (`rover_ros`; `rover_ros` + `rover_orchestrator`;
-`rover_networking_web_server`; and `rover_cockpit_ros2_diagnostics` respectively). Those
+and `rover_cockpit_ros2_diagnostics` respectively). Those
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
@@ -137,7 +132,6 @@ Select specific application commits instead of branch tips with:
 balena push g_potlog_radu/rovera1 \
   --build-arg ROVER_ROS_REF=<sha> \
   --build-arg ROVER_ORCHESTRATOR_REF=<sha> \
-  --build-arg ROVER_WEB_REF=<sha> \
   --build-arg ROVER_COCKPIT_REF=<sha>
 ```
 
@@ -157,27 +151,6 @@ image tags, apt packages, and npm/uv tool versions can still change. Use
 `--nocache` when refreshing those dependencies even with pinned application
 commits.
 
-## Network dashboard
-
-`rover-web-server` listens on port 80, which is the only port the balena
-**Public Device URL** proxies. Enable that URL on the device in balenaCloud
-and the dashboard is reachable at `https://<uuid>.balena-devices.com`. On the
-rover LAN it is reachable directly at `http://<device-ip>/`.
-
-The monitored device list defaults to the `devices.json` committed in the web
-server repo. To retarget a fleet or a single device without rebuilding the
-image, set a balenaCloud variable:
-
-- `ROVER_WEB_DEVICES_JSON` — the device list inline as JSON (preferred on
-  balena, since host files cannot be bind-mounted into a container).
-- `ROVER_WEB_DEVICES_FILE` — path to a device list on a mounted volume.
-
-Other service variables: `ROVER_WEB_PORT` (default `8080` in the app, set to
-`80` in `docker-compose.yml`), `ROVER_WEB_POLL_INTERVAL_SECONDS`,
-`ROVER_WEB_PING_TIMEOUT_SECONDS`, `ROVER_WEB_FOXGLOVE_URL` (default
-`ws://127.0.0.1:8765`, the foxglove_bridge in `rover-a1-platform`; the `/led` page
-reads the LED animation state through it).
-
 ## Ports
 
 All containers use host networking, so these bind directly to the device:
@@ -186,11 +159,10 @@ All containers use host networking, so these bind directly to the device:
 |--------|--------------------------------|
 | 22     | sshd (`rover-a1-platform`)           |
 | 2222   | sshd (`rover-a1-orchestrator`)       |
-| 80     | network dashboard              |
+| 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **both** ROS services |
-| 9091   | Cockpit ROS 2 diagnostics (`rover-cockpit`) |
 | 48484  | balena supervisor              |
 
 `rover-a1-orchestrator` opens one port of its own, 2222, for its sshd — 22 belongs to
@@ -250,8 +222,9 @@ are debugging is Nav 2, the costmaps or the mission manager.
 
 `rover-cockpit` serves the Cockpit web console with only the
 [ROS 2 diagnostics plugin](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics)
-installed. Open `http://<rover-lan-ip>:9091` (e.g. `http://192.168.1.201:9091`),
-log in, and the diagnostics page opens directly. It has three tabs:
+installed. Open `http://<rover-lan-ip>/` (e.g. `http://192.168.1.201/`; Cockpit
+listens on port 80, plain http, no TLS for now), log in, and the diagnostics page
+opens directly. It replaces the former `rover-web-server` dashboard. It has three tabs:
 
 - **ROS 2 Diagnostics** (`#/`) — the aggregated diagnostics tree (below).
 - **ROS 2 Networking** (`#/networking`) — ICMP status, round-trip time and 60-probe
@@ -276,9 +249,11 @@ log in, and the diagnostics page opens directly. It has three tabs:
   that `rover_diag_manager`'s `system_diag.launch.py` starts as part of
   `rover_bringup`; its groups are configured in
   `rover_diag_manager/config/diagnostic_aggregator.yaml`.
-- **LAN only:** the page is plain http (the browser would block the `ws://`
-  connection from an https page), and the balena Public Device URL proxies only
-  port 80, not 9091 or 8765.
+- **LAN only:** open it over plain http on the rover's own address. The balena
+  Public Device URL does proxy port 80, so the login page loads through it, but that
+  URL is https on a balena hostname: the browser then blocks the page's `ws://` link
+  to foxglove_bridge (mixed content, and 8765 is not proxied), so the ROS tabs stay
+  disconnected there. The Networking tab works through it (its pings run on the rover).
 - The container needs no ROS, no Zenoh access and no privileges beyond
   `CAP_NET_RAW` (for the Networking tab's `ping`); if the page shows
   "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`.
@@ -335,7 +310,7 @@ warning in `/tmp/rover_bringup.log`.
 |----------|---------|---------|--------|
 | `ROVER_COCKPIT_USER` | `rover` | cockpit | Cockpit login user. `root` is refused. |
 | `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — `rover-cockpit` exits with an error without it. |
-| `ROVER_COCKPIT_PORT` | `9091` | cockpit | Port the Cockpit web console binds. |
+| `ROVER_COCKPIT_PORT` | `80` | cockpit | Port the Cockpit web console binds (plain http). |
 
 ```bash
 balena env set ROVER_START_BRINGUP false --device <device-uuid> --service rover-a1-platform
@@ -391,8 +366,8 @@ variable), so rover topics and services are `/rover/cmd_vel`,
 `/rover/odom`, `/rover/led/state`, `/rover/hardware_interface/gpio_state`, …
 and TF frames are `rover/odom`, `rover/base_link`. `/tf`, `/tf_static`,
 `/rosout` and `/parameter_events` stay global, as do the web bridges
-(`/rosapi/*`, `/client_count`). `rover-a1-orchestrator`, `rover-web-server` and
-`rover-cockpit` read the same variable, so change it on all four services together — an
+(`/rosapi/*`, `/client_count`). `rover-a1-orchestrator` and
+`rover-cockpit` read the same variable, so change it on all three services together — an
 all-services balenaCloud variable is the safe way to do that.
 
 ## ROS 2 over the rover LAN (Zenoh)
