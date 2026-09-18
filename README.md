@@ -30,6 +30,7 @@ rover_docker/
 └── rover_cockpit/
     ├── Dockerfile
     ├── cockpit.conf
+    ├── healthcheck.sh
     └── start.sh
 ```
 
@@ -44,6 +45,7 @@ bash -n rover_a1_platform/start.sh
 bash -n rover_a1_orchestrator/start.sh
 bash -n rover_a1_sensors/start.sh
 bash -n rover_cockpit/start.sh
+bash -n rover_cockpit/healthcheck.sh
 docker compose config --quiet
 docker buildx inspect --bootstrap
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
@@ -328,6 +330,7 @@ warning in `/tmp/rover_bringup.log`.
 | `ROVER_COCKPIT_USER` | `rover` | cockpit | Cockpit login user. `root` is refused. |
 | `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — `rover-cockpit` exits with an error without it. |
 | `ROVER_COCKPIT_PORT` | `80` | cockpit | Port the Cockpit web console binds (plain http). |
+| `ROVER_COCKPIT_DEBUG` | `false` | cockpit | `true` = verbose cockpit-ws / session / bridge logging in the container log (`G_MESSAGES_DEBUG`, `COCKPIT_DEBUG`), to see why a session was closed. Very chatty; leave off normally. |
 
 ```bash
 balena env set ROVER_START_ROS_PLATFORM false --device <device-uuid> --service rover-a1-platform

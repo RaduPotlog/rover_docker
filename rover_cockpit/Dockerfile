@@ -50,7 +50,8 @@ COPY --from=build /src/dist /usr/share/cockpit/ros2-diagnostics
 
 COPY cockpit.conf /etc/cockpit/cockpit.conf
 COPY start.sh /usr/local/bin/start.sh
-RUN chmod +x /usr/local/bin/start.sh
+COPY healthcheck.sh /usr/local/bin/healthcheck.sh
+RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/healthcheck.sh
 
 EXPOSE 80
 

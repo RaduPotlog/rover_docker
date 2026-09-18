@@ -16,7 +16,7 @@ version: '2.4'
 # ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world
 # ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
 #                              body_link; unset = URDF default
-# ROVER_COCKPIT_*              cockpit: http port and login; no password = cockpit won't start
+# ROVER_COCKPIT_*              cockpit: http port, login and debug logging; no password = cockpit won't start
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
 # platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
@@ -66,6 +66,7 @@ services:
       ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
@@ -103,6 +104,7 @@ services:
       ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -139,6 +141,7 @@ services:
       ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
   rover-cockpit:
     build:
       context: ./rover_cockpit
@@ -178,9 +181,11 @@ services:
       ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
     healthcheck:
-      # $$ defers expansion to the container, so a changed ROVER_COCKPIT_PORT is followed.
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${ROVER_COCKPIT_PORT:-80}/ping"]
+      # A script in the image reads ROVER_COCKPIT_PORT at run time. No `$` here: balena's
+      # compose parser mangles `$$`, which made this check fail forever and restart cockpit.
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
       start_period: 10s

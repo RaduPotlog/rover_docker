@@ -37,6 +37,14 @@ fi
 
 echo "Cockpit ROS 2 diagnostics on http port $ROVER_COCKPIT_PORT (user: $ROVER_COCKPIT_USER, namespace: ${ROVER_NAMESPACE:-<none>})"
 
+# Verbose cockpit-ws / session / bridge logging in the container log, to see why a
+# session gets closed. Off by default: it logs every message.
+if [ "${ROVER_COCKPIT_DEBUG:-false}" = true ]; then
+  echo "ROVER_COCKPIT_DEBUG=true: verbose Cockpit logging enabled"
+  export G_MESSAGES_DEBUG=cockpit-ws,cockpit-protocol
+  export COCKPIT_DEBUG=all
+fi
+
 # exec: cockpit-ws becomes PID 1 and receives the container's stop signals.
 # Plain http (see cockpit.conf); every interface, like foxglove_bridge on 8765
 # that the page connects to.
