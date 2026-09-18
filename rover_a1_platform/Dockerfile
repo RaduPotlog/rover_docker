@@ -95,7 +95,7 @@ RUN echo "export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5" >> /root/.bashrc
 RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 
 ####################################### Install ROVER Firmware ##########################
-RUN apt-get update && apt-get install -y libyaml-cpp-dev libpcap-dev \
+RUN apt-get update && apt-get install -y libyaml-cpp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -p ~/ros2_ws/rover_a1
