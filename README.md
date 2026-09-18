@@ -241,22 +241,25 @@ opens directly. It replaces the former `rover-web-server` dashboard. It has thre
   `rover-cockpit` (required — the container exits without it). The user name is
   `ROVER_COCKPIT_USER` (default `rover`; `root` is refused). Both are re-applied on
   every container start.
-- **Data path:** the page runs in the browser and connects straight to
-  `ws://<same host>:8765` (foxglove_bridge in `rover-a1-platform`), subscribing to
+- **Data path:** the page runs in the browser, but it does not connect to
+  foxglove_bridge itself: the Cockpit bridge in `rover-cockpit` opens a TCP stream to
+  `127.0.0.1:8765` on the rover (foxglove_bridge in `rover-a1-platform`, same host
+  network) and the page speaks the WebSocket protocol over that stream, inside the
+  Cockpit session on port 80. It subscribes to
   `/rover/diagnostics_agg` (`<ROVER_NAMESPACE>/diagnostics_agg`; the container
   writes the namespace to `/etc/clearpath/robot.yaml`, where the plugin reads it).
   That topic is published by the `rover_diagnostic_aggregator`
   that `rover_diag_manager`'s `system_diag.launch.py` starts as part of
   `rover_bringup`; its groups are configured in
   `rover_diag_manager/config/diagnostic_aggregator.yaml`.
-- **LAN only:** open it over plain http on the rover's own address. The balena
-  Public Device URL does proxy port 80, so the login page loads through it, but that
-  URL is https on a balena hostname: the browser then blocks the page's `ws://` link
-  to foxglove_bridge (mixed content, and 8765 is not proxied), so the ROS tabs stay
-  disconnected there. The Networking tab works through it (its pings run on the rover).
+- **Where it works:** on the rover LAN (`http://<rover-lan-ip>/`) and through the
+  balena Public Device URL (`https://<uuid>.balena-devices.com`), since everything
+  travels over the one Cockpit connection on port 80. Port 8765 never has to be
+  reachable from the browser.
 - The container needs no ROS, no Zenoh access and no privileges beyond
   `CAP_NET_RAW` (for the Networking tab's `ping`); if the page shows
-  "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`.
+  "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`
+  (`ss -ltnp | grep 8765` on the host).
 
 ## Device variables
 
