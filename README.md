@@ -13,7 +13,7 @@ service's build context in `docker-compose.yml`:
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-web-server` | `rover_web_server/` | [`rover_networking_web_server`](https://github.com/RaduPotlog/rover_networking_web_server) — network monitoring dashboard on port 80 |
-| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 diagnostics web page on port 9091 (no ROS inside; the browser reads diagnostics from foxglove_bridge) |
+| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 9091 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
 
 ```
 rover_docker/
@@ -251,7 +251,18 @@ are debugging is Nav 2, the costmaps or the mission manager.
 `rover-cockpit` serves the Cockpit web console with only the
 [ROS 2 diagnostics plugin](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics)
 installed. Open `http://<rover-lan-ip>:9091` (e.g. `http://192.168.1.201:9091`),
-log in, and the diagnostics page opens directly.
+log in, and the diagnostics page opens directly. It has three tabs:
+
+- **ROS 2 Diagnostics** (`#/`) — the aggregated diagnostics tree (below).
+- **ROS 2 Networking** (`#/networking`) — ICMP status, round-trip time and 60-probe
+  history of every interface in the rover topology, pinged every 5 s by `ping` in
+  the `rover-cockpit` container (host network, `CAP_NET_RAW`) while the tab is open.
+  The device list and topology are compiled into the plugin
+  (`src/networking/devices.json`, `topology.json`).
+- **ROS 2 LEDs** (`#/leds`) — live `rover_led` state through foxglove_bridge
+  (`<ns>/led/state`, `<ns>/led/animations`, `<ns>/led/channel_{1,2}_frame`), plus
+  controls that call `<ns>/led/set_animation` and `<ns>/led/set_brightness`.
+  Any logged-in Cockpit user can use them.
 
 - **Login:** set the balenaCloud service variable `ROVER_COCKPIT_PASSWORD` for
   `rover-cockpit` (required — the container exits without it). The user name is
@@ -268,8 +279,9 @@ log in, and the diagnostics page opens directly.
 - **LAN only:** the page is plain http (the browser would block the `ws://`
   connection from an https page), and the balena Public Device URL proxies only
   port 80, not 9091 or 8765.
-- The container needs no ROS, no privileges and no Zenoh access; if the page
-  shows "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`.
+- The container needs no ROS, no Zenoh access and no privileges beyond
+  `CAP_NET_RAW` (for the Networking tab's `ping`); if the page shows
+  "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`.
 
 ## Device variables
 

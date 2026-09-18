@@ -194,8 +194,15 @@ services:
     restart: always
     # The Cockpit plugin tells the browser to open ws://<same host>:8765
     # (foxglove_bridge in rover-a1-platform), so the page must be reached on the
-    # rover's own address - host mode, no port mapping.
+    # rover's own address - host mode, no port mapping. Host mode also lets the
+    # ROS 2 Networking tab ping the rover-local segments (192.168.1.0/24,
+    # 192.168.77.0/24, 192.168.88.0/24).
     network_mode: host
+    # The ROS 2 Networking tab runs `ping`, which needs CAP_NET_RAW. Docker
+    # grants it by default; declaring it keeps the tab working under a hardened
+    # profile (same as rover-web-server).
+    cap_add:
+      - NET_RAW
     environment:
       # 9090 is rosbridge in rover-a1-platform.
       ROVER_COCKPIT_PORT: '9091'
@@ -203,7 +210,7 @@ services:
       # ROVER_COCKPIT_PASSWORD has no default: set it as a balenaCloud service
       # variable, or the container exits with an error.
       ROVER_COCKPIT_PASSWORD:
-      # Namespace of /<ns>/diagnostics_agg (must match rover-a1-platform).
+      # Namespace of /<ns>/diagnostics_agg and /<ns>/led/* (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
       # Carried for completeness; acted on by the services named in README.md.
       ROVER_START_BRINGUP: 'true'

@@ -19,6 +19,7 @@ RUN git clone https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics.git /
 # Keep .git until make has run: the Makefile uses git to fetch Cockpit's lib files.
 WORKDIR /src
 RUN npm ci --no-audit --no-fund \
+    && npm test \
     && NODE_ENV=production make
 
 ##################################### Runtime ################################################
@@ -32,10 +33,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # pages (systemd, users, metrics) need systemd on the host and would only show
 # broken pages or edit a throwaway container, so they are removed. With the
 # plugin as the only menu entry, login lands straight on ROS 2 diagnostics.
-# curl: healthcheck.
+# curl: healthcheck. iputils-ping: the ROS 2 Networking tab pings the rover's
+# devices through cockpit.spawn (needs CAP_NET_RAW, see docker-compose.yml).
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
-       cockpit-ws cockpit-bridge cockpit-system curl ca-certificates \
+       cockpit-ws cockpit-bridge cockpit-system curl ca-certificates iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
        /usr/share/cockpit/systemd /usr/share/cockpit/users /usr/share/cockpit/metrics
 
