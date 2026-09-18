@@ -91,7 +91,7 @@ fi
 # Both Nav 2 costmaps mark and clear from <namespace>/scan, and the navigation trees stop
 # driving when the lidar diagnostics go bad.
 if [ "$ROVER_USE_LIDAR" != true ]; then
-  echo "WARNING: ROVER_USE_LIDAR=false - no lidar driver in rover-a1-platform, so the costmaps stay empty and navigation drives blind"
+  echo "WARNING: ROVER_USE_LIDAR=false - no lidar driver in rover-a1-sensors, so the costmaps stay empty and navigation drives blind"
 fi
 
 # Source ROS2 + workspace

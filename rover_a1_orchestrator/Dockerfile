@@ -126,11 +126,13 @@ RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
 RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orchestrator \
     && git -C src/rover_orchestrator checkout ${ROVER_ORCHESTRATOR_REF}
 
-# pointcloud_crop_box - the self-filter for rover_navigation's `pointcloud` observation path.
-# Source-only, so it cannot come from rosdep.
+# rover_ros's source-only dependencies (hardware_deps.repos: rover_cppuprofile). Imported so
+# rosdep can resolve every package in src/rover_ros; none of them is built here.
 RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
 
-# autonomy_deps.repos also pins navigation2 (via the RaduPotlog/rover_navigation fork), for
+# autonomy_deps.repos brings pointcloud_crop_box - the self-filter for rover_navigation's
+# `pointcloud` observation path, source-only so it cannot come from rosdep. It also pins
+# navigation2 (via the RaduPotlog/rover_navigation fork), for
 # nav2_smac_planner - planner_server's GridBased plugin, and the one nav2_* package with no
 # arm64 binary on lyrical/resolute.
 # vcstool cannot express a sparse checkout, so prune the import down to that single package.
@@ -156,11 +158,11 @@ RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos \
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
-# Scan only what `--packages-up-to rover_autonomy` builds. src/rover_ros is cloned whole, but
-# its hardware packages depend on source-only repos from hardware_deps.repos, which this image
-# deliberately does not import - scanning them makes rosdep fail on [crsf_receiver_msg] and
-# [rover_rslidar_sdk], and would drag in the hardware stack we are trying to leave out.
-# src/rover_pointcloud_crop_box must stay listed so -i ignores its `pointcloud_crop_box` key.
+# Scans all of src/: src/rover_ros is cloned whole, so rosdep also installs the apt
+# dependencies of its hardware packages even though colcon never builds them. The lidar and
+# GPS drivers are not in rover_ros any more (they are the rover_sensors payload, built by
+# rover-a1-sensors). src/rover_pointcloud_crop_box must stay in src/ so -i ignores its
+# `pointcloud_crop_box` key.
 # Pulls the Nav 2 stack, slam_toolbox, spatio_temporal_voxel_layer and behaviortree_cpp.
 # nav2_smac_planner is the one exception: -i skips it because the pruned checkout above
 # put it in src/, and colcon builds it from source instead.

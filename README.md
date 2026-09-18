@@ -12,6 +12,7 @@ service's build context in `docker-compose.yml`:
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
+| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
 
 ```
@@ -21,6 +22,9 @@ rover_docker/
 │   ├── Dockerfile
 │   └── start.sh
 ├── rover_a1_orchestrator/
+│   ├── Dockerfile
+│   └── start.sh
+├── rover_a1_sensors/
 │   ├── Dockerfile
 │   └── start.sh
 └── rover_cockpit/
@@ -38,6 +42,7 @@ Desktop integration for the distribution first.
 ```bash
 bash -n rover_a1_platform/start.sh
 bash -n rover_a1_orchestrator/start.sh
+bash -n rover_a1_sensors/start.sh
 bash -n rover_cockpit/start.sh
 docker compose config --quiet
 docker buildx inspect --bootstrap
@@ -45,6 +50,8 @@ docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-a1-platform:lyrical ./rover_a1_platform
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-a1-orchestrator:lyrical ./rover_a1_orchestrator
+docker buildx build --platform linux/arm64 --pull --no-cache --load \
+  -t rover-a1-sensors:lyrical ./rover_a1_sensors
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-cockpit:lyrical ./rover_cockpit
 ```
@@ -123,7 +130,7 @@ balena push g_potlog_radu/rovera1 --nocache
 
 `--nocache` matters: every service fetches its application source with
 `git clone` during the build (`rover_ros`; `rover_ros` + `rover_orchestrator`;
-and `rover_cockpit_ros2_diagnostics` respectively). Those
+`rover_sensors`; and `rover_cockpit_ros2_diagnostics` respectively). Those
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
@@ -133,11 +140,15 @@ Select specific application commits instead of branch tips with:
 balena push g_potlog_radu/rovera1 \
   --build-arg ROVER_ROS_REF=<sha> \
   --build-arg ROVER_ORCHESTRATOR_REF=<sha> \
+  --build-arg ROVER_SENSORS_REF=<sha> \
   --build-arg ROVER_COCKPIT_REF=<sha>
 ```
 
 `ROVER_ROS_REF` is consumed by both `rover-a1-platform` and `rover-a1-orchestrator`, so the
-two stay on the same `rover_ros` commit.
+two stay on the same `rover_ros` commit. `ROVER_SENSORS_REF` pins `rover_sensors` in
+`rover-a1-sensors`. The sensors and the platform share only topic names (`gps/fix`, `scan`,
+`rslidar_points`, `diagnostics`), so their commits can move independently as long as that
+contract holds.
 
 > **Renaming note.** `rover-a1-platform` was previously the service `rovera1-app`. balena
 > treats a renamed service as a new one, so any *service-scoped* device or fleet variable
@@ -164,6 +175,8 @@ All containers use host networking, so these bind directly to the device:
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **both** ROS services |
+| 10110/udp | RUTX11 NMEA forwarding → GNSS driver (`rover-a1-sensors`) |
+| 6699/udp, 7788/udp | RoboSense RS16 MSOP / DIFOP → lidar driver (`rover-a1-sensors`) |
 | 48484  | balena supervisor              |
 
 `rover-a1-orchestrator` opens one port of its own, 2222, for its sshd — 22 belongs to
@@ -285,8 +298,10 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
-| `ROVER_USE_GPS` | `false` | platform, orchestrator | Localization mode. `false`: EKF on wheel odometry + IMU. `true`: also fuses the RUTX11 GPS (`rover_gps` heading alignment, `navsat_transform`, global EKF publishing `map → odom`). The GPS driver and its diagnostics run in both modes. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
-| `ROVER_USE_LIDAR` | `false` | platform, orchestrator | Starts the RoboSense RS16 driver. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
+| `ROVER_USE_GPS` | `false` | platform, orchestrator | Localization mode, fusion only. `false`: EKF on wheel odometry + IMU. `true`: also fuses GPS (`rover_gps_heading` alignment, `navsat_transform`, global EKF publishing `map → odom`), consuming `gps/fix` from `rover-a1-sensors`. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
+| `ROVER_START_SENSORS` | `true` | sensors | `false` idles `rover-a1-sensors` (no drivers at all). |
+| `ROVER_USE_SENSOR_GPS` | `true` | sensors | Starts the RUTX11 GNSS driver and its `GPS fix` diagnostics. On by default so GPS health is visible even when `ROVER_USE_GPS=false`. |
+| `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
 | `ROVER_LAN_IP` | `192.168.1.201` | platform | Rover LAN address the Zenoh router binds. |
 | `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps` or `slam`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox) requires `ROVER_USE_GPS=false` — exactly one process may publish `map → odom`. An unrecognized value is ignored with a warning. |
 | `ROVER_NAV_MAP` | *(unset)* | orchestrator | Optional path to a map yaml inside the container; defaults to `rover_navigation`'s `empty_world.yaml`. |
@@ -368,8 +383,8 @@ variable), so rover topics and services are `/rover/cmd_vel`,
 `/rover/odom`, `/rover/led/state`, `/rover/hardware_interface/gpio_state`, …
 and TF frames are `rover/odom`, `rover/base_link`. `/tf`, `/tf_static`,
 `/rosout` and `/parameter_events` stay global, as do the web bridges
-(`/rosapi/*`, `/client_count`). `rover-a1-orchestrator` and
-`rover-cockpit` read the same variable, so change it on all three services together — an
+(`/rosapi/*`, `/client_count`). `rover-a1-orchestrator`,
+`rover-a1-sensors` and `rover-cockpit` read the same variable, so change it on all four services together — an
 all-services balenaCloud variable is the safe way to do that.
 
 ## ROS 2 over the rover LAN (Zenoh)

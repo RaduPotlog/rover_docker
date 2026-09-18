@@ -41,9 +41,11 @@ services:
       ROVER_START_MISSION_MANAGER: 'true'
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
       # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
+      # Fusion only: the GPS driver itself is ROVER_USE_SENSOR_GPS in rover-a1-sensors.
       ROVER_USE_GPS: 'false'
-      # Start the RoboSense RS16 lidar driver (true/false). Leave false on rovers with no
-      # lidar fitted. A balenaCloud device or fleet variable overrides this.
+      # Sensor payload switches, read by rover-a1-sensors - see that service.
+      ROVER_START_SENSORS: 'true'
+      ROVER_USE_SENSOR_GPS: 'true'
       ROVER_USE_LIDAR: 'false'
       # Sensor mount poses relative to body_link (x forward, y left, z up) are read by
       # rover_description. Declared unset so the URDF defaults apply until a balenaCloud
@@ -99,7 +101,11 @@ services:
       ROVER_USE_GPS: 'false'
       # Both Nav 2 costmaps mark and clear from <namespace>/scan and the navigation trees
       # stop driving when lidar diagnostics go bad, so false means navigation drives blind.
+      # The driver runs in rover-a1-sensors; read here only to warn.
       ROVER_USE_LIDAR: 'false'
+      # Carried for completeness; read by rover-a1-sensors.
+      ROVER_START_SENSORS: 'true'
+      ROVER_USE_SENSOR_GPS: 'true'
       # Optional overrides, unset by default:
       #   ROVER_LOCALIZATION_SOURCE  odom | gps | slam - overrides the ROVER_USE_GPS mapping.
       #   ROVER_NAV_MAP              path to a map yaml; defaults to rover_navigation's
@@ -126,6 +132,54 @@ services:
       ROVER_LIDAR_ORIENTATION_P:
       ROVER_LIDAR_ORIENTATION_Y:
       # Carried for completeness; read by rover-cockpit.
+      ROVER_COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PASSWORD:
+  rover-a1-sensors:
+    build:
+      context: ./rover_a1_sensors
+    restart: always
+    # The sensor payload (rover_sensors repo): GNSS and lidar drivers, which only publish.
+    # Host mode for two reasons: the drivers receive UDP straight on the device's interfaces
+    # (RUTX11 NMEA on 10110, RS16 on 6699/7788 - no `ports:` mapping needed), and rmw_zenoh_cpp
+    # joins rover-a1-platform's router at tcp/127.0.0.1:7447. Not privileged: UDP sockets need
+    # no device access. Add it only for a future serial/USB sensor.
+    network_mode: host
+    environment:
+      # Namespace and TF prefix of the drivers (must match rover-a1-platform).
+      ROVER_NAMESPACE: 'rover'
+      # Start the sensor drivers at all (true/false); false idles the container.
+      ROVER_START_SENSORS: 'true'
+      # Start the RUTX11 NMEA GNSS driver + GPS fix diagnostics (true/false). On by default so
+      # GPS health is visible even when localization does not fuse it (ROVER_USE_GPS).
+      ROVER_USE_SENSOR_GPS: 'true'
+      # Start the RoboSense RS16 lidar driver (true/false). Leave false on rovers with no
+      # lidar fitted.
+      ROVER_USE_LIDAR: 'false'
+      # Carried for completeness; acted on by the services named in README.md.
+      ROVER_START_ROS_PLATFORM: 'true'
+      ROVER_START_NAVIGATION: 'false'
+      ROVER_START_MISSION_MANAGER: 'true'
+      ROVER_USE_GPS: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
+      ROVER_GPS_LOCALIZATION_X:
+      ROVER_GPS_LOCALIZATION_Y:
+      ROVER_GPS_LOCALIZATION_Z:
+      ROVER_GPS_ORIENTATION_R:
+      ROVER_GPS_ORIENTATION_P:
+      ROVER_GPS_ORIENTATION_Y:
+      ROVER_IMU_LOCALIZATION_X:
+      ROVER_IMU_LOCALIZATION_Y:
+      ROVER_IMU_LOCALIZATION_Z:
+      ROVER_IMU_ORIENTATION_R:
+      ROVER_IMU_ORIENTATION_P:
+      ROVER_IMU_ORIENTATION_Y:
+      ROVER_LIDAR_LOCALIZATION_X:
+      ROVER_LIDAR_LOCALIZATION_Y:
+      ROVER_LIDAR_LOCALIZATION_Z:
+      ROVER_LIDAR_ORIENTATION_R:
+      ROVER_LIDAR_ORIENTATION_P:
+      ROVER_LIDAR_ORIENTATION_Y:
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
   rover-cockpit:
@@ -159,6 +213,8 @@ services:
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'true'
       ROVER_USE_GPS: 'false'
+      ROVER_START_SENSORS: 'true'
+      ROVER_USE_SENSOR_GPS: 'true'
       ROVER_USE_LIDAR: 'false'
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
