@@ -34,13 +34,11 @@ services:
       # Start rover_bringup (true/false). A balenaCloud device or fleet variable overrides this.
       ROVER_START_ROVER_ROS: 'true'
       # Start the rover_orchestrator stack in rover-a1-orchestrator (true/false). Read there,
-      # not here, but it gates on ROVER_START_ROVER_ROS too - see that service.
+      # not here, but it gates on ROVER_START_ROVER_ROS too - see that service. Leave false
+      # when a companion controller runs the stack instead.
       ROVER_START_NAV_BRINGUP: 'false'
       # Start rover_mission_manager on top of Nav 2 (true/false). Read by rover-a1-orchestrator.
       ROVER_START_MISSION_MANAGER: 'true'
-      # true = the orchestrator stack runs on a separate companion controller, so
-      # rover-a1-orchestrator stays idle on this device. Read by rover-a1-orchestrator.
-      ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER: 'false'
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
       # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
       ROVER_USE_GPS: 'false'
@@ -85,14 +83,13 @@ services:
     environment:
       # Namespace of the Nav 2 / mission-manager nodes (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
-      # The orchestrator stack starts only when ALL of these hold:
-      #   ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER = false  (it runs on this device)
-      #   ROVER_START_ROVER_ROS                      = true   (there is a platform to drive)
-      #   ROVER_START_NAV_BRINGUP                    = true   (navigation is wanted)
+      # The orchestrator stack starts only when BOTH of these hold:
+      #   ROVER_START_NAV_BRINGUP = true  (navigation is wanted on this device)
+      #   ROVER_START_ROVER_ROS   = true  (there is a platform to drive)
       # Otherwise the container idles - it does not exit, so restart: always cannot loop it.
+      # When a companion controller runs the stack, leave ROVER_START_NAV_BRINGUP false here.
       ROVER_START_ROVER_ROS: 'true'
       ROVER_START_NAV_BRINGUP: 'false'
-      ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER: 'false'
       # Also start rover_mission_manager on top of Nav 2 (true/false).
       ROVER_START_MISSION_MANAGER: 'true'
       # Picks Nav 2's localization_source: true -> 'gps' (rover_ekf_global_node owns
@@ -161,7 +158,6 @@ services:
       ROVER_START_ROVER_ROS: 'true'
       ROVER_START_NAV_BRINGUP: 'false'
       ROVER_START_MISSION_MANAGER: 'true'
-      ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER: 'false'
       ROVER_USE_GPS: 'false'
       ROVER_USE_LIDAR: 'false'
       ROVER_GPS_LOCALIZATION_X:

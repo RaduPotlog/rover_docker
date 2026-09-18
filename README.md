@@ -273,9 +273,8 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_START_ROVER_ROS` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
-| `ROVER_START_NAV_BRINGUP` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2). Requires `ROVER_START_ROVER_ROS=true` and `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=false`. |
+| `ROVER_START_NAV_BRINGUP` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROVER_ROS=true`. Leave `false` when a companion controller runs the stack. |
 | `ROVER_START_MISSION_MANAGER` | `true` | orchestrator | `false` runs Nav 2 without `rover_mission_manager`. Only consulted when the orchestrator stack starts at all. |
-| `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER` | `false` | orchestrator | `true` means a separate companion controller runs the autonomy stack, so `rover-a1-orchestrator` idles on this device. |
 
 ### Robot configuration
 
@@ -334,23 +333,22 @@ an all-services variable, or set `ROVER_START_NAV_BRINGUP=false` alongside it.
 server, SLAM map autosaver) and `rover_mission_manager` (behavior-tree mission supervision
 dispatching Nav 2 actions).
 
-It starts that stack only when **all three** hold:
+It starts that stack only when **both** hold:
 
-| `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER` | `ROVER_START_ROVER_ROS` | `ROVER_START_NAV_BRINGUP` | Result |
-|---|---|---|---|
-| `false` | `true` | `true` | Nav 2 starts (+ mission manager unless `ROVER_START_MISSION_MANAGER=false`) |
-| `false` | `true` | `false` | idle — navigation not requested |
-| `false` | `false` | *any* | idle — no platform bringup to navigate with |
-| `true` | *any* | *any* | idle — the stack runs on a companion controller |
+| `ROVER_START_ROVER_ROS` | `ROVER_START_NAV_BRINGUP` | Result |
+|---|---|---|
+| `true` | `true` | Nav 2 starts (+ mission manager unless `ROVER_START_MISSION_MANAGER=false`) |
+| *any* | `false` | idle — navigation not requested on this device (also the setting when a companion controller runs the stack) |
+| `false` | `true` | idle — no platform bringup to navigate with |
 
 When idle the container does **not** exit — it sleeps, so `restart: always` cannot crash-loop
 it, and the balena logs carry a single line naming the reason. sshd starts ahead of that
 gate, so an idle container is still reachable on 2222 — which is when a shell tends to be
 most useful. Changing any of the variables restarts the container, which re-evaluates them.
 
-With `ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=true`, build and run `rover_autonomy` on the
-companion computer instead and join the rover's Zenoh router over the rover LAN (see
-[ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)). Keep `ROVER_NAMESPACE` and the
+To run the stack on a companion controller, leave `ROVER_START_NAV_BRINGUP=false` on the rover,
+then build and run `rover_autonomy` on the companion computer and join the rover's Zenoh
+router over the rover LAN (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)). Keep `ROVER_NAMESPACE` and the
 chosen `localization_source` identical on both sides.
 
 The container runs no Zenoh router of its own: host networking puts it in the same network
