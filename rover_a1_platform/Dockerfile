@@ -136,13 +136,10 @@ RUN cmake --build build
 WORKDIR /root/ros2_ws/rover_a1/src/rover_cppuprofile/build
 RUN make install
 
-WORKDIR /root/ros2_ws/rover_a1/src/rover_modbus
-RUN apt-get update && apt-get install -y libnet1-dev \
-    && rm -rf /var/lib/apt/lists/*
-RUN cmake -Bbuild .
-RUN cmake --build build
-WORKDIR /root/ros2_ws/rover_a1/src/rover_modbus/build
-RUN make install
+# rover_modbus used to be built and `make install`ed here, the way rover_cppuprofile still is
+# above. It is now an ament package, so the colcon build below picks it up in dependency order
+# from rover_modbus_driver's <depend> - no manual step, and no libnet1-dev either (the library
+# included <libnet.h> but never linked it).
 
 RUN apt-get update && apt-get install -y libzmq3-dev sqlite3 \
     && rm -rf /var/lib/apt/lists/*

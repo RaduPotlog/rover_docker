@@ -2,7 +2,7 @@
 #
 # Sibling of rover-a1-platform. That image owns the hardware (drivers, controllers,
 # localization, safety) and runs the Zenoh router; this one owns navigation only and joins
-# that router over host networking. Everything hardware-specific - rover_modbus,
+# that router over host networking. Everything hardware-specific - the Modbus stack,
 # rover_cppuprofile, libpcap, dbus - is deliberately absent here. Two things are exceptions.
 # An sshd, which listens on 2222 rather than 22: host networking puts this container in
 # rover-a1-platform's network namespace, where that image's sshd already owns 22. And the
