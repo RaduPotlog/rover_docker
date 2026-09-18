@@ -162,6 +162,8 @@ services:
       ROVER_USE_GPS: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      # Carried for completeness; read by rover-a1-platform's rover_description, which
+      # publishes body_link -> gps_link / lidar_link. The payload drivers only stamp frame_ids.
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
