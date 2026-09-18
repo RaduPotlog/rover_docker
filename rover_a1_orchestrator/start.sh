@@ -35,7 +35,7 @@ norm_bool() {
   esac
 }
 
-ROVER_START_ROVER_ROS=$(norm_bool "${ROVER_START_ROVER_ROS:-}" true)
+ROVER_START_ROS_PLATFORM=$(norm_bool "${ROVER_START_ROS_PLATFORM:-}" true)
 ROVER_START_NAV_BRINGUP=$(norm_bool "${ROVER_START_NAV_BRINGUP:-}" false)
 ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" true)
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
@@ -48,8 +48,8 @@ START_ORCHESTRATOR=false
 DISABLED_REASON=""
 if [ "$ROVER_START_NAV_BRINGUP" != true ]; then
   DISABLED_REASON="ROVER_START_NAV_BRINGUP=false (navigation not requested on this device)"
-elif [ "$ROVER_START_ROVER_ROS" != true ]; then
-  DISABLED_REASON="ROVER_START_ROVER_ROS=false (no platform bringup to navigate with)"
+elif [ "$ROVER_START_ROS_PLATFORM" != true ]; then
+  DISABLED_REASON="ROVER_START_ROS_PLATFORM=false (no platform bringup to navigate with)"
 else
   START_ORCHESTRATOR=true
 fi

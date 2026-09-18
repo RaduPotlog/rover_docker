@@ -272,8 +272,8 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
-| `ROVER_START_ROVER_ROS` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
-| `ROVER_START_NAV_BRINGUP` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROVER_ROS=true`. Leave `false` when a companion controller runs the stack. |
+| `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
+| `ROVER_START_NAV_BRINGUP` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
 | `ROVER_START_MISSION_MANAGER` | `true` | orchestrator | `false` runs Nav 2 without `rover_mission_manager`. Only consulted when the orchestrator stack starts at all. |
 
 ### Robot configuration
@@ -312,7 +312,7 @@ warning in `/tmp/rover_bringup.log`.
 | `ROVER_COCKPIT_PORT` | `80` | cockpit | Port the Cockpit web console binds (plain http). |
 
 ```bash
-balena env set ROVER_START_ROVER_ROS false --device <device-uuid> --service rover-a1-platform
+balena env set ROVER_START_ROS_PLATFORM false --device <device-uuid> --service rover-a1-platform
 balena env set ROVER_START_NAV_BRINGUP true --device <device-uuid> --service rover-a1-orchestrator
 ```
 
@@ -321,7 +321,7 @@ the value on the next start. There is no image rebuild, but expect roughly 15–
 for `rover-a1-platform`, with its web bridges down during that time. A variable scoped to one
 service restarts only that service; an all-services device variable restarts every service.
 
-Note that `ROVER_START_ROVER_ROS` is read by two services. Scoping it to `rover-a1-platform`
+Note that `ROVER_START_ROS_PLATFORM` is read by two services. Scoping it to `rover-a1-platform`
 alone stops the bringup but leaves the orchestrator believing it is still running — set it as
 an all-services variable, or set `ROVER_START_NAV_BRINGUP=false` alongside it.
 
@@ -335,7 +335,7 @@ dispatching Nav 2 actions).
 
 It starts that stack only when **both** hold:
 
-| `ROVER_START_ROVER_ROS` | `ROVER_START_NAV_BRINGUP` | Result |
+| `ROVER_START_ROS_PLATFORM` | `ROVER_START_NAV_BRINGUP` | Result |
 |---|---|---|
 | `true` | `true` | Nav 2 starts (+ mission manager unless `ROVER_START_MISSION_MANAGER=false`) |
 | *any* | `false` | idle — navigation not requested on this device (also the setting when a companion controller runs the stack) |

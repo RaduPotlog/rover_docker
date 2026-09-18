@@ -32,9 +32,9 @@ services:
       # rover_bringup reads it; it is kept equal across all services.
       ROVER_NAMESPACE: 'rover'
       # Start rover_bringup (true/false). A balenaCloud device or fleet variable overrides this.
-      ROVER_START_ROVER_ROS: 'true'
+      ROVER_START_ROS_PLATFORM: 'true'
       # Start the rover_orchestrator stack in rover-a1-orchestrator (true/false). Read there,
-      # not here, but it gates on ROVER_START_ROVER_ROS too - see that service. Leave false
+      # not here, but it gates on ROVER_START_ROS_PLATFORM too - see that service. Leave false
       # when a companion controller runs the stack instead.
       ROVER_START_NAV_BRINGUP: 'false'
       # Start rover_mission_manager on top of Nav 2 (true/false). Read by rover-a1-orchestrator.
@@ -84,11 +84,11 @@ services:
       # Namespace of the Nav 2 / mission-manager nodes (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
       # The orchestrator stack starts only when BOTH of these hold:
-      #   ROVER_START_NAV_BRINGUP = true  (navigation is wanted on this device)
-      #   ROVER_START_ROVER_ROS   = true  (there is a platform to drive)
+      #   ROVER_START_NAV_BRINGUP  = true  (navigation is wanted on this device)
+      #   ROVER_START_ROS_PLATFORM = true  (there is a platform to drive)
       # Otherwise the container idles - it does not exit, so restart: always cannot loop it.
       # When a companion controller runs the stack, leave ROVER_START_NAV_BRINGUP false here.
-      ROVER_START_ROVER_ROS: 'true'
+      ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAV_BRINGUP: 'false'
       # Also start rover_mission_manager on top of Nav 2 (true/false).
       ROVER_START_MISSION_MANAGER: 'true'
@@ -155,7 +155,7 @@ services:
       # Namespace of /<ns>/diagnostics_agg and /<ns>/led/* (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
       # Carried for completeness; acted on by the services named in README.md.
-      ROVER_START_ROVER_ROS: 'true'
+      ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAV_BRINGUP: 'false'
       ROVER_START_MISSION_MANAGER: 'true'
       ROVER_USE_GPS: 'false'
