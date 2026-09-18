@@ -48,6 +48,11 @@ RUN sed -i 's/^session\s\+required\s\+pam_loginuid.so/session    optional     pa
 # Installed under the plugin's package.json name.
 COPY --from=build /src/dist /usr/share/cockpit/ros2-diagnostics
 
+# Login-page branding: cockpit-ws picks /usr/share/cockpit/branding/<os-release ID>,
+# so overwrite the stock Ubuntu logo/heading (and the default fallback) with ours.
+COPY branding/ /usr/share/cockpit/branding/ubuntu/
+COPY branding/ /usr/share/cockpit/branding/default/
+
 COPY cockpit.conf /etc/cockpit/cockpit.conf
 COPY start.sh /usr/local/bin/start.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh

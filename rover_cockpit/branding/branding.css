@@ -1,0 +1,18 @@
+/* Rover A1 login branding. Replaces the stock Ubuntu branding that cockpit-ws
+   picks from /etc/os-release (see Dockerfile). */
+#badge {
+    inline-size: 225px;
+    block-size: 225px;
+    background-image: url("logo.png");
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+#brand {
+    font-size: 18pt;
+    text-transform: none;
+}
+
+#brand::before {
+    content: "Rover A1 \2014 Mechatronics Academy";
+}
