@@ -25,9 +25,8 @@ norm_bool() {
 }
 
 ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" true)
-# The GNSS driver runs by default, so GPS health is visible even when localization does not
-# fuse GPS - that is ROVER_USE_GPS, read by rover-a1-platform, not here.
-ROVER_USE_SENSOR_GPS=$(norm_bool "${ROVER_USE_SENSOR_GPS:-}" true)
+# One switch for GPS on the whole rover: the driver here, GPS fusion in rover-a1-platform.
+ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
@@ -68,12 +67,12 @@ ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
 # **Sensor drivers - Background**
 nohup ros2 launch rover_sensors_bringup rover_sensors.launch.py \
   namespace:="${ROVER_NAMESPACE}" \
-  use_gps:="${ROVER_USE_SENSOR_GPS}" \
+  use_gps:="${ROVER_USE_GPS}" \
   use_lidar:="${ROVER_USE_LIDAR}" \
   > /tmp/rover_sensors.log 2>&1 < /dev/null &
 SENSORS_PID=$!
 CHILD_PIDS+=("$SENSORS_PID")
-echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_SENSOR_GPS, lidar=$ROVER_USE_LIDAR)"
+echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR)"
 
 # **Supervise** - exit when the launch exits (crash or otherwise), so docker-compose's
 # `restart: always` (Balena) brings the drivers back up cleanly.

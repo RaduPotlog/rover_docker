@@ -14,8 +14,8 @@ esac
 
 # Localization mode for rover_bringup (read there through the ROVER_USE_GPS environment variable).
 # Normalized like ROVER_START_ROS_PLATFORM so the launch files only ever see true/false;
-# unset or empty means false (wheels + IMU), true adds the RUTX11 GPS (dual EKF). Fusion only:
-# the GPS driver runs in rover-a1-sensors (ROVER_USE_SENSOR_GPS).
+# unset or empty means false (wheels + IMU), true adds the RUTX11 GPS (dual EKF). The same
+# variable starts the GPS driver in rover-a1-sensors.
 case "${ROVER_USE_GPS:-false}" in
   [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_USE_GPS=true ;;
   *) ROVER_USE_GPS=false ;;

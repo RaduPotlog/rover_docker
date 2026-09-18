@@ -298,9 +298,8 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
-| `ROVER_USE_GPS` | `false` | platform, orchestrator | Localization mode, fusion only. `false`: EKF on wheel odometry + IMU. `true`: also fuses GPS (`rover_gps_heading` alignment, `navsat_transform`, global EKF publishing `map → odom`), consuming `gps/fix` from `rover-a1-sensors`. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
+| `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF publishing `map → odom`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
 | `ROVER_START_SENSORS` | `true` | sensors | `false` idles `rover-a1-sensors` (no drivers at all). |
-| `ROVER_USE_SENSOR_GPS` | `true` | sensors | Starts the RUTX11 GNSS driver and its `GPS fix` diagnostics. On by default so GPS health is visible even when `ROVER_USE_GPS=false`. |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
 | `ROVER_LAN_IP` | `192.168.1.201` | platform | Rover LAN address the Zenoh router binds. |
 | `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps` or `slam`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox) requires `ROVER_USE_GPS=false` — exactly one process may publish `map → odom`. An unrecognized value is ignored with a warning. |
