@@ -309,7 +309,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
 | `ROVER_START_NAVIGATION` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
 | `ROVER_START_MISSION_MANAGER` | `false` | orchestrator | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. |
-| `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. |
+| `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. It also idles when both `ROVER_USE_GPS` and `ROVER_USE_LIDAR` are false, since there is no driver to run. |
 
 ### Robot configuration
 

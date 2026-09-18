@@ -37,10 +37,19 @@ ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" false)
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 
+# With no driver selected the launch has nothing to run and exits at once, so that case is
+# treated as disabled too.
+DISABLED_REASON=""
+if [ "$ROVER_START_SENSORS" != true ]; then
+  DISABLED_REASON="ROVER_START_SENSORS=false"
+elif [ "$ROVER_USE_GPS" != true ] && [ "$ROVER_USE_LIDAR" != true ]; then
+  DISABLED_REASON="ROVER_USE_GPS=false and ROVER_USE_LIDAR=false (no driver to run)"
+fi
+
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them here.
-if [ "$ROVER_START_SENSORS" != true ]; then
-  echo "Sensor payload disabled (ROVER_START_SENSORS=false); idling (sshd on 222 stays up)"
+if [ -n "$DISABLED_REASON" ]; then
+  echo "Sensor payload disabled: ${DISABLED_REASON}; idling (sshd on 222 stays up)"
   # Waiting on sshd idles just as well as `sleep infinity` and keeps signals forwarded.
   wait "$SSHD_PID" || true
   terminate_children
