@@ -36,18 +36,18 @@ norm_bool() {
 }
 
 ROVER_START_ROS_PLATFORM=$(norm_bool "${ROVER_START_ROS_PLATFORM:-}" true)
-ROVER_START_NAV_BRINGUP=$(norm_bool "${ROVER_START_NAV_BRINGUP:-}" false)
+ROVER_START_NAVIGATION=$(norm_bool "${ROVER_START_NAVIGATION:-}" false)
 ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" true)
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 
 # The orchestrator stack runs on this device only when navigation is requested here AND the
 # platform bringup it drives is actually running. To run the stack on a companion controller
-# instead, leave ROVER_START_NAV_BRINGUP=false on this device.
+# instead, leave ROVER_START_NAVIGATION=false on this device.
 START_ORCHESTRATOR=false
 DISABLED_REASON=""
-if [ "$ROVER_START_NAV_BRINGUP" != true ]; then
-  DISABLED_REASON="ROVER_START_NAV_BRINGUP=false (navigation not requested on this device)"
+if [ "$ROVER_START_NAVIGATION" != true ]; then
+  DISABLED_REASON="ROVER_START_NAVIGATION=false (navigation not requested on this device)"
 elif [ "$ROVER_START_ROS_PLATFORM" != true ]; then
   DISABLED_REASON="ROVER_START_ROS_PLATFORM=false (no platform bringup to navigate with)"
 else

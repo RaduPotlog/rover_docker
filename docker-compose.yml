@@ -36,7 +36,7 @@ services:
       # Start the rover_orchestrator stack in rover-a1-orchestrator (true/false). Read there,
       # not here, but it gates on ROVER_START_ROS_PLATFORM too - see that service. Leave false
       # when a companion controller runs the stack instead.
-      ROVER_START_NAV_BRINGUP: 'false'
+      ROVER_START_NAVIGATION: 'false'
       # Start rover_mission_manager on top of Nav 2 (true/false). Read by rover-a1-orchestrator.
       ROVER_START_MISSION_MANAGER: 'true'
       # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
@@ -84,12 +84,12 @@ services:
       # Namespace of the Nav 2 / mission-manager nodes (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
       # The orchestrator stack starts only when BOTH of these hold:
-      #   ROVER_START_NAV_BRINGUP  = true  (navigation is wanted on this device)
+      #   ROVER_START_NAVIGATION   = true  (navigation is wanted on this device)
       #   ROVER_START_ROS_PLATFORM = true  (there is a platform to drive)
       # Otherwise the container idles - it does not exit, so restart: always cannot loop it.
-      # When a companion controller runs the stack, leave ROVER_START_NAV_BRINGUP false here.
+      # When a companion controller runs the stack, leave ROVER_START_NAVIGATION false here.
       ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAV_BRINGUP: 'false'
+      ROVER_START_NAVIGATION: 'false'
       # Also start rover_mission_manager on top of Nav 2 (true/false).
       ROVER_START_MISSION_MANAGER: 'true'
       # Picks Nav 2's localization_source: true -> 'gps' (rover_ekf_global_node owns
@@ -156,7 +156,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       # Carried for completeness; acted on by the services named in README.md.
       ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAV_BRINGUP: 'false'
+      ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'true'
       ROVER_USE_GPS: 'false'
       ROVER_USE_LIDAR: 'false'

@@ -273,7 +273,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
-| `ROVER_START_NAV_BRINGUP` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
+| `ROVER_START_NAVIGATION` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
 | `ROVER_START_MISSION_MANAGER` | `true` | orchestrator | `false` runs Nav 2 without `rover_mission_manager`. Only consulted when the orchestrator stack starts at all. |
 
 ### Robot configuration
@@ -313,7 +313,7 @@ warning in `/tmp/rover_bringup.log`.
 
 ```bash
 balena env set ROVER_START_ROS_PLATFORM false --device <device-uuid> --service rover-a1-platform
-balena env set ROVER_START_NAV_BRINGUP true --device <device-uuid> --service rover-a1-orchestrator
+balena env set ROVER_START_NAVIGATION true --device <device-uuid> --service rover-a1-orchestrator
 ```
 
 Changing a variable restarts the affected containers automatically, and `start.sh` re-reads
@@ -323,7 +323,7 @@ service restarts only that service; an all-services device variable restarts eve
 
 Note that `ROVER_START_ROS_PLATFORM` is read by two services. Scoping it to `rover-a1-platform`
 alone stops the bringup but leaves the orchestrator believing it is still running — set it as
-an all-services variable, or set `ROVER_START_NAV_BRINGUP=false` alongside it.
+an all-services variable, or set `ROVER_START_NAVIGATION=false` alongside it.
 
 ## Where the orchestrator runs
 
@@ -335,7 +335,7 @@ dispatching Nav 2 actions).
 
 It starts that stack only when **both** hold:
 
-| `ROVER_START_ROS_PLATFORM` | `ROVER_START_NAV_BRINGUP` | Result |
+| `ROVER_START_ROS_PLATFORM` | `ROVER_START_NAVIGATION` | Result |
 |---|---|---|
 | `true` | `true` | Nav 2 starts (+ mission manager unless `ROVER_START_MISSION_MANAGER=false`) |
 | *any* | `false` | idle — navigation not requested on this device (also the setting when a companion controller runs the stack) |
@@ -346,7 +346,7 @@ it, and the balena logs carry a single line naming the reason. sshd starts ahead
 gate, so an idle container is still reachable on 2222 — which is when a shell tends to be
 most useful. Changing any of the variables restarts the container, which re-evaluates them.
 
-To run the stack on a companion controller, leave `ROVER_START_NAV_BRINGUP=false` on the rover,
+To run the stack on a companion controller, leave `ROVER_START_NAVIGATION=false` on the rover,
 then build and run `rover_autonomy` on the companion computer and join the rover's Zenoh
 router over the rover LAN (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)). Keep `ROVER_NAMESPACE` and the
 chosen `localization_source` identical on both sides.
