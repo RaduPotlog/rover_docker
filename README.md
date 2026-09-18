@@ -58,8 +58,9 @@ override it with a different distribution at runtime.
 The orchestrator build is the slow one. Besides the workspace itself it
 compiles `nav2_smac_planner` from source — `planner_server`'s `GridBased`
 plugin, and the only `nav2_*` package with no arm64 binary on
-lyrical/resolute. `autonomy_deps.repos` pins it at navigation2 tag `1.5.1`
-to match the Nav 2 debs, and the Dockerfile prunes that import to the single
+lyrical/resolute. `autonomy_deps.repos` pins it at tag `1.5.1` of
+[`rover_navigation`](https://github.com/RaduPotlog/rover_navigation), our
+navigation2 fork, to match the Nav 2 debs, and the Dockerfile prunes that import to the single
 package with `git sparse-checkout`. Budget roughly eight extra minutes on
 arm64; the build is not stuck. Its `ros2 pkg prefix` below must report the
 workspace install tree, not `/opt/ros/lyrical`.

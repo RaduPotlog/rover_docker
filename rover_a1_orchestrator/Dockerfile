@@ -130,8 +130,9 @@ RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orc
 # Source-only, so it cannot come from rosdep.
 RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
 
-# autonomy_deps.repos also pins navigation2, for nav2_smac_planner - planner_server's
-# GridBased plugin, and the one nav2_* package with no arm64 binary on lyrical/resolute.
+# autonomy_deps.repos also pins navigation2 (via the RaduPotlog/rover_navigation fork), for
+# nav2_smac_planner - planner_server's GridBased plugin, and the one nav2_* package with no
+# arm64 binary on lyrical/resolute.
 # vcstool cannot express a sparse checkout, so prune the import down to that single package.
 #
 # Mandatory, not an optimization, for two independent reasons:
@@ -144,12 +145,14 @@ RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_dep
 #     than installing the debs at all - measured: ros-gz-bridge, nav2-minimal-tb3-sim,
 #     nav2-minimal-tb4-sim and qt6-scxml-dev, in an image with no GUI and no simulator.
 #
-# src/navigation2, not src/third_party/navigation2: vcs import derives the directory from the
-# .repos key. Folded into the same RUN as the import because Docker layers are additive -
-# pruning in a later layer would leave the full tree committed in this one and reclaim nothing.
+# src/rover_navigation, not src/third_party/rover_navigation: vcs import derives the directory
+# from the .repos key. That directory is the Nav 2 fork, not the rover's own rover_navigation
+# package, which lives in src/rover_orchestrator/rover_navigation. Folded into the same RUN as
+# the import because Docker layers are additive - pruning in a later layer would leave the full
+# tree committed in this one and reclaim nothing.
 RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos \
-    && git -C src/navigation2 sparse-checkout init --cone \
-    && git -C src/navigation2 sparse-checkout set nav2_smac_planner
+    && git -C src/rover_navigation sparse-checkout init --cone \
+    && git -C src/rover_navigation sparse-checkout set nav2_smac_planner
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
