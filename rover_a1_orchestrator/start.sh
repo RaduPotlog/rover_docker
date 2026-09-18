@@ -39,6 +39,7 @@ ROVER_START_ROS_PLATFORM=$(norm_bool "${ROVER_START_ROS_PLATFORM:-}" true)
 ROVER_START_NAVIGATION=$(norm_bool "${ROVER_START_NAVIGATION:-}" false)
 ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" false)
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
+ROVER_GPS_PUBLISH_MAP_TF=$(norm_bool "${ROVER_GPS_PUBLISH_MAP_TF:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 
 # The orchestrator stack runs on this device only when navigation is requested here AND the
@@ -66,9 +67,10 @@ if [ "$START_ORCHESTRATOR" != true ]; then
 fi
 
 # Nav 2's global frame owner. ROVER_USE_GPS decides it by default - 'gps' means
-# rover_ekf_global_node (rover-a1-platform) publishes map -> odom, 'odom' means nobody does
-# and navigation is odometry-relative. ROVER_LOCALIZATION_SOURCE overrides that, and is the
-# only way to reach 'slam' (slam_toolbox, which requires ROVER_USE_GPS=false).
+# rover_ekf_global_node (rover-a1-platform) publishes map -> odom (needs
+# ROVER_GPS_PUBLISH_MAP_TF=true), 'odom' means nobody does and navigation is odometry-relative.
+# ROVER_LOCALIZATION_SOURCE overrides that, and is the only way to reach 'slam' (slam_toolbox,
+# which requires ROVER_USE_GPS=false or ROVER_GPS_PUBLISH_MAP_TF=false).
 if [ "$ROVER_USE_GPS" = true ]; then
   LOCALIZATION_SOURCE=gps
 else
@@ -84,8 +86,13 @@ if [ -n "${ROVER_LOCALIZATION_SOURCE:-}" ]; then
       ;;
   esac
 fi
-if [ "$LOCALIZATION_SOURCE" = slam ] && [ "$ROVER_USE_GPS" = true ]; then
-  echo "WARNING: localization_source=slam with ROVER_USE_GPS=true - slam_toolbox and rover_ekf_global_node would both publish map -> odom"
+# Exactly one process may publish map -> odom. With ROVER_GPS_PUBLISH_MAP_TF=false the GPS
+# global EKF still fuses but leaves map -> odom to slam_toolbox (or AMCL).
+if [ "$LOCALIZATION_SOURCE" = slam ] && [ "$ROVER_USE_GPS" = true ] && [ "$ROVER_GPS_PUBLISH_MAP_TF" = true ]; then
+  echo "WARNING: localization_source=slam with ROVER_USE_GPS=true - slam_toolbox and rover_ekf_global_node would both publish map -> odom (set ROVER_GPS_PUBLISH_MAP_TF=false)"
+fi
+if [ "$LOCALIZATION_SOURCE" = gps ] && [ "$ROVER_GPS_PUBLISH_MAP_TF" != true ]; then
+  echo "WARNING: localization_source=gps with ROVER_GPS_PUBLISH_MAP_TF=false - nothing publishes map -> odom, so Nav 2 cannot resolve its global frame"
 fi
 
 # Both Nav 2 costmaps mark and clear from <namespace>/scan, and the navigation trees stop

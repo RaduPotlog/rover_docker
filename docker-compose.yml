@@ -9,8 +9,10 @@ version: '2.4'
 # ROVER_START_NAVIGATION       orchestrator: run Nav 2 (also needs ROVER_START_ROS_PLATFORM)
 # ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2
 # ROVER_START_SENSORS          sensors: run the sensor payload drivers at all
-# ROVER_USE_GPS                sensors: GNSS driver; platform: GPS fusion (map -> odom);
+# ROVER_USE_GPS                sensors: GNSS driver; platform: GPS fusion;
 #                              orchestrator: Nav 2 localization_source gps vs odom
+# ROVER_GPS_PUBLISH_MAP_TF     platform: global EKF publishes map -> odom (default false: SLAM/AMCL
+#                              own it); orchestrator: localization_source checks
 # ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
 # ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam, overrides ROVER_USE_GPS
 # ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world
@@ -42,6 +44,7 @@ services:
       ROVER_START_MISSION_MANAGER: 'false'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
@@ -80,6 +83,7 @@ services:
       ROVER_START_MISSION_MANAGER: 'false'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
@@ -118,6 +122,7 @@ services:
       ROVER_START_MISSION_MANAGER: 'false'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
@@ -158,6 +163,7 @@ services:
       ROVER_START_MISSION_MANAGER: 'false'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:

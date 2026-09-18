@@ -22,6 +22,16 @@ case "${ROVER_USE_GPS:-false}" in
 esac
 export ROVER_USE_GPS
 
+# Whether the GPS global EKF (rover_ekf_global_node) broadcasts map -> odom; read by
+# rover_localization's publish_global_tf default. Unset or empty means false: SLAM or AMCL owns
+# map -> odom while GPS is still fused (odometry/global keeps publishing). Set it true to let the
+# global EKF publish map -> odom itself.
+case "${ROVER_GPS_PUBLISH_MAP_TF:-false}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_GPS_PUBLISH_MAP_TF=true ;;
+  *) ROVER_GPS_PUBLISH_MAP_TF=false ;;
+esac
+export ROVER_GPS_PUBLISH_MAP_TF
+
 terminate_children() {
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -125,7 +135,7 @@ if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
   nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
   ROVER_PID=$!
   CHILD_PIDS+=("$ROVER_PID")
-  echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_USE_GPS=$ROVER_USE_GPS)"
+  echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_USE_GPS=$ROVER_USE_GPS, ROVER_GPS_PUBLISH_MAP_TF=$ROVER_GPS_PUBLISH_MAP_TF)"
 else
   echo "Rover bringup disabled (ROVER_START_ROS_PLATFORM=false); skipping"
 fi
