@@ -7,8 +7,9 @@
 # rover_orchestrator. Joins the platform's Zenoh router over host networking, which is also
 # what lets the drivers receive the RUTX11 NMEA (UDP 10110) and the RS16 (UDP 6699/7788).
 #
-# Deliberately lean: no sshd, no Claude tooling. Use `balena ssh <device> rover-a1-sensors`
-# (or the platform's shell, which sees the same ROS graph) to debug.
+# Deliberately lean apart from an sshd on 222 (22 is rover-a1-platform's, 2222 is
+# rover-a1-orchestrator's - host networking gives all three one port space). No Claude tooling:
+# use the platform or orchestrator shell for that, both see the same ROS graph.
 FROM ubuntu:26.04
 
 # Avoid interactive prompts during build
@@ -19,6 +20,22 @@ RUN apt-get update && apt-get install -y \
     curl wget gnupg2 lsb-release software-properties-common \
     build-essential git locales \
     && rm -rf /var/lib/apt/lists/*
+
+##################################### SSH ################################################
+
+# Above the ROS and workspace layers so the expensive clone / rosdep / colcon steps below
+# keep their cache. Same arrangement as rover-a1-orchestrator: root password login through an
+# sshd_config.d drop-in, only the port differs. See README.md "Sensors SSH".
+RUN apt-get update && apt-get install -y openssh-server \
+    && mkdir -p /var/run/sshd \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN echo 'root:root' | chpasswd \
+    && printf 'Port 222\nPermitRootLogin yes\nUsePAM no\n' \
+       > /etc/ssh/sshd_config.d/rover_sensors.conf
+
+# Documentation only - host networking ignores EXPOSE.
+EXPOSE 222
 
 RUN add-apt-repository universe
 

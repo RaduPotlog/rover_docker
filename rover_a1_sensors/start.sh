@@ -15,6 +15,14 @@ terminate_children() {
 # of only whichever one happens to be PID 1.
 trap 'terminate_children; exit 0' TERM INT
 
+# **SSHD background (keep alive)** - started before the enable/disable gate below, so the
+# container is reachable even while the payload idles. Port 222 (set in the image's
+# sshd_config drop-in): 22 is rover-a1-platform's, 2222 rover-a1-orchestrator's.
+/usr/sbin/sshd -D &
+SSHD_PID=$!
+CHILD_PIDS+=("$SSHD_PID")
+echo "sshd started on port 222 (PID: $SSHD_PID)"
+
 # Normalize a balenaCloud boolean the same way the other rover containers do: unset or empty
 # falls back to $2, and anything that is not true/1/yes/on (any case) is false.
 norm_bool() {
@@ -32,10 +40,10 @@ ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them here.
 if [ "$ROVER_START_SENSORS" != true ]; then
-  echo "Sensor payload disabled (ROVER_START_SENSORS=false); idling"
-  sleep infinity &
-  CHILD_PIDS+=("$!")
-  wait "${CHILD_PIDS[@]}" || true
+  echo "Sensor payload disabled (ROVER_START_SENSORS=false); idling (sshd on 222 stays up)"
+  # Waiting on sshd idles just as well as `sleep infinity` and keeps signals forwarded.
+  wait "$SSHD_PID" || true
+  terminate_children
   exit 0
 fi
 
@@ -81,7 +89,14 @@ echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GP
 # child exiting non-zero would otherwise kill the shell here and skip the teardown.
 EXIT_CODE=0
 wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
-echo "Supervised process 'rover_sensors_bringup' (PID $SENSORS_PID) exited (code $EXIT_CODE)"
+
+for entry in "sshd:$SSHD_PID" "rover_sensors_bringup:$SENSORS_PID"; do
+  name=${entry%%:*}
+  pid=${entry##*:}
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+  fi
+done
 
 terminate_children
 exit "$EXIT_CODE"

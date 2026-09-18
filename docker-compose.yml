@@ -109,6 +109,7 @@ services:
     build:
       context: ./rover_a1_sensors
     restart: always
+    # Its sshd listens on 222: 22 is rover-a1-platform's, 2222 rover-a1-orchestrator's.
     network_mode: host
     environment:
       ROVER_NAMESPACE: 'rover'

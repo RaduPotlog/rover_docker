@@ -12,7 +12,7 @@ service's build context in `docker-compose.yml`:
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
-| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
+| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 222. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
 
 ```
@@ -173,6 +173,7 @@ All containers use host networking, so these bind directly to the device:
 |--------|--------------------------------|
 | 22     | sshd (`rover-a1-platform`)           |
 | 2222   | sshd (`rover-a1-orchestrator`)       |
+| 222    | sshd (`rover-a1-sensors`)            |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
@@ -233,6 +234,20 @@ are debugging is Nav 2, the costmaps or the mission manager.
   which is served by that container — host networking gives the two services one namespace,
   which is why the orchestrator runs no rosbridge of its own. With the platform stopped,
   `claude mcp list` shows ros-mcp failing to connect.
+
+## Sensors SSH
+
+`rover-a1-sensors` runs its own sshd on **222**, set up like the orchestrator's (same
+`root:root` credentials, `/etc/ssh/sshd_config.d/` drop-in); only the port differs.
+
+```bash
+ssh -p 222 root@<rover-lan-ip>      # sensors: GNSS + lidar drivers
+```
+
+As in the orchestrator, `start.sh` starts sshd ahead of the `ROVER_START_SENSORS` gate, so the
+shell is up while the payload idles, and a dead sshd restarts the service. The caveats above
+(image-default password, host keys shared per build) apply here too. The image carries no
+Claude tooling; use the 22 or 2222 shell for that.
 
 ## ROS 2 diagnostics (Cockpit)
 
