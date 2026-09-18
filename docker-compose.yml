@@ -1,23 +1,31 @@
 version: '2.4'
 
-# Every ROVER_* balenaCloud variable is declared on every service below, so a fleet or device
-# variable is visible wherever it might be read and the full set is discoverable in one place.
+# Every service declares the same ROVER_* variables, in the same order; each service acts only
+# on some of them (README.md, "Device variables"). A balenaCloud fleet/device variable overrides
+# them. `KEY: 'value'` is a default; `KEY:` stays unset unless balenaCloud sets it.
 #
-# Two forms, and the difference is load-bearing:
-#   KEY: 'value'   a default that a balenaCloud fleet/device variable overrides.
-#   KEY:           declared but left UNSET unless balenaCloud provides it (compose passes it
-#                  through from the host environment). Used for the sensor mount poses and
-#                  ROVER_COCKPIT_PASSWORD, whose consumers distinguish "unset" from "empty":
-#                  rover_description falls back to its URDF defaults, and rover_cockpit
-#                  refuses to start without a password.
+# ROVER_NAMESPACE              ROS namespace and TF prefix; keep it equal on every service
+# ROVER_START_ROS_PLATFORM     platform: run rover_bringup (the only switch on by default)
+# ROVER_START_NAVIGATION       orchestrator: run Nav 2 (also needs ROVER_START_ROS_PLATFORM)
+# ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2
+# ROVER_START_SENSORS          sensors: run the sensor payload drivers at all
+# ROVER_USE_GPS                sensors: GNSS driver; platform: GPS fusion (map -> odom);
+#                              orchestrator: Nav 2 localization_source gps vs odom
+# ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
+# ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam, overrides ROVER_USE_GPS
+# ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world
+# ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
+#                              body_link; unset = URDF default
+# ROVER_COCKPIT_*              cockpit: http port and login; no password = cockpit won't start
 #
-# Only the services listed in the "read by" column of README.md's device-variable table act
-# on a given variable; the rest simply carry it.
+# All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
+# platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
 
 services:
   rover-a1-platform:
     build:
       context: ./rover_a1_platform
+    # Direct hardware access for the rover drivers.
     privileged: true
     restart: always
     network_mode: host
@@ -28,27 +36,15 @@ services:
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
     environment:
-      # ROS namespace for every rover node and topic (/rover/cmd_vel, ...).
-      # rover_bringup reads it; it is kept equal across all services.
       ROVER_NAMESPACE: 'rover'
-      # Start rover_bringup (true/false). A balenaCloud device or fleet variable overrides this.
       ROVER_START_ROS_PLATFORM: 'true'
-      # Start the rover_orchestrator stack in rover-a1-orchestrator (true/false). Read there,
-      # not here, but it gates on ROVER_START_ROS_PLATFORM too - see that service. Leave false
-      # when a companion controller runs the stack instead.
       ROVER_START_NAVIGATION: 'false'
-      # Start rover_mission_manager on top of Nav 2 (true/false). Read by rover-a1-orchestrator.
-      ROVER_START_MISSION_MANAGER: 'true'
-      # Localization mode (true/false): false = wheels + IMU; true = wheels + IMU + RUTX11 GPS
-      # (dual EKF, map -> odom). A balenaCloud device or fleet variable overrides this.
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
-      # Sensor payload switches, read by rover-a1-sensors - see that service.
-      ROVER_START_SENSORS: 'true'
       ROVER_USE_LIDAR: 'false'
-      # Sensor mount poses relative to body_link (x forward, y left, z up) are read by
-      # rover_description. Declared unset so the URDF defaults apply until a balenaCloud
-      # device/fleet variable defines one (IMU defaults -0.09/0.0/0.2 m, the rest 0).
-      # A non-numeric value is ignored with a warning in /tmp/rover_bringup.log.
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -67,49 +63,25 @@ services:
       ROVER_LIDAR_ORIENTATION_R:
       ROVER_LIDAR_ORIENTATION_P:
       ROVER_LIDAR_ORIENTATION_Y:
-      # Cockpit login, acted on by rover-cockpit only.
+      ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
     restart: always
-    # The Zenoh router lives in rover-a1-platform. Host mode puts this container on the same
-    # network namespace, so rmw_zenoh_cpp joins the ROS 2 graph at tcp/127.0.0.1:7447 without
-    # a second router. The only port this service opens is 2222 for its own sshd - 22 belongs
-    # to rover-a1-platform's, and host mode means the two share one port space. No `ports:`
-    # mapping: host networking binds 2222 straight to the device's interfaces.
+    # Its sshd listens on 2222: port 22 belongs to rover-a1-platform in the shared host network.
     network_mode: host
     environment:
-      # Namespace of the Nav 2 / mission-manager nodes (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
-      # The orchestrator stack starts only when BOTH of these hold:
-      #   ROVER_START_NAVIGATION   = true  (navigation is wanted on this device)
-      #   ROVER_START_ROS_PLATFORM = true  (there is a platform to drive)
-      # Otherwise the container idles - it does not exit, so restart: always cannot loop it.
-      # When a companion controller runs the stack, leave ROVER_START_NAVIGATION false here.
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
-      # Also start rover_mission_manager on top of Nav 2 (true/false).
-      ROVER_START_MISSION_MANAGER: 'true'
-      # Picks Nav 2's localization_source: true -> 'gps' (rover_ekf_global_node owns
-      # map -> odom), false -> 'odom' (odometry-relative navigation, drifts). Must match
-      # rover-a1-platform. Override explicitly - including with 'slam' - via
-      # ROVER_LOCALIZATION_SOURCE below.
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
-      # Both Nav 2 costmaps mark and clear from <namespace>/scan and the navigation trees
-      # stop driving when lidar diagnostics go bad, so false means navigation drives blind.
-      # The driver runs in rover-a1-sensors; read here only to warn.
       ROVER_USE_LIDAR: 'false'
-      # Carried for completeness; read by rover-a1-sensors.
-      ROVER_START_SENSORS: 'true'
-      # Optional overrides, unset by default:
-      #   ROVER_LOCALIZATION_SOURCE  odom | gps | slam - overrides the ROVER_USE_GPS mapping.
-      #   ROVER_NAV_MAP              path to a map yaml; defaults to rover_navigation's
-      #                              empty_world.yaml.
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
-      # Carried for completeness; read by rover-a1-platform's rover_description.
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -128,36 +100,24 @@ services:
       ROVER_LIDAR_ORIENTATION_R:
       ROVER_LIDAR_ORIENTATION_P:
       ROVER_LIDAR_ORIENTATION_Y:
-      # Carried for completeness; read by rover-cockpit.
+      ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
     restart: always
-    # The sensor payload (rover_sensors repo): GNSS and lidar drivers, which only publish.
-    # Host mode for two reasons: the drivers receive UDP straight on the device's interfaces
-    # (RUTX11 NMEA on 10110, RS16 on 6699/7788 - no `ports:` mapping needed), and rmw_zenoh_cpp
-    # joins rover-a1-platform's router at tcp/127.0.0.1:7447. Not privileged: UDP sockets need
-    # no device access. Add it only for a future serial/USB sensor.
     network_mode: host
     environment:
-      # Namespace and TF prefix of the drivers (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
-      # Start the sensor drivers at all (true/false); false idles the container.
-      ROVER_START_SENSORS: 'true'
-      # Start the RoboSense RS16 lidar driver (true/false). Leave false on rovers with no
-      # lidar fitted.
-      ROVER_USE_LIDAR: 'false'
-      # Carried for completeness; acted on by the services named in README.md.
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'true'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
+      ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
-      # Carried for completeness; read by rover-a1-platform's rover_description, which
-      # publishes body_link -> gps_link / lidar_link. The payload drivers only stamp frame_ids.
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -176,41 +136,27 @@ services:
       ROVER_LIDAR_ORIENTATION_R:
       ROVER_LIDAR_ORIENTATION_P:
       ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_COCKPIT_PORT: '80'
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
   rover-cockpit:
     build:
       context: ./rover_cockpit
     restart: always
-    # The Cockpit plugin tells the browser to open ws://<same host>:8765
-    # (foxglove_bridge in rover-a1-platform), so the page must be reached on the
-    # rover's own address - host mode, no port mapping: port 80 binds straight
-    # to the device's interfaces. Host mode also lets the ROS 2 Networking tab
-    # ping the rover-local segments (192.168.1.0/24, 192.168.77.0/24,
-    # 192.168.88.0/24, 172.22.100.97).
     network_mode: host
-    # The ROS 2 Networking tab runs `ping`, which needs CAP_NET_RAW. Docker
-    # grants it by default; declaring it keeps the tab working under a hardened
-    # profile without needing the `privileged: true` that rover-a1-platform requires.
+    # The Networking tab runs `ping`.
     cap_add:
       - NET_RAW
     environment:
-      # Plain http on port 80 (no TLS for now, see rover_cockpit/cockpit.conf).
-      # 9090 is rosbridge in rover-a1-platform.
-      ROVER_COCKPIT_PORT: '80'
-      ROVER_COCKPIT_USER: 'rover'
-      # ROVER_COCKPIT_PASSWORD has no default: set it as a balenaCloud service
-      # variable, or the container exits with an error.
-      ROVER_COCKPIT_PASSWORD:
-      # Namespace of /<ns>/diagnostics_agg and /<ns>/led/* (must match rover-a1-platform).
       ROVER_NAMESPACE: 'rover'
-      # Carried for completeness; acted on by the services named in README.md.
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'true'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
-      ROVER_START_SENSORS: 'true'
       ROVER_USE_LIDAR: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -229,9 +175,11 @@ services:
       ROVER_LIDAR_ORIENTATION_R:
       ROVER_LIDAR_ORIENTATION_P:
       ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_COCKPIT_PORT: '80'
+      ROVER_COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PASSWORD:
     healthcheck:
-      # $$ defers expansion to the container, so a changed ROVER_COCKPIT_PORT
-      # variable is followed.
+      # $$ defers expansion to the container, so a changed ROVER_COCKPIT_PORT is followed.
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:$${ROVER_COCKPIT_PORT:-80}/ping"]
       interval: 30s
       timeout: 5s

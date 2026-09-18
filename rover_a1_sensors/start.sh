@@ -24,7 +24,7 @@ norm_bool() {
   esac
 }
 
-ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" true)
+ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" false)
 # One switch for GPS on the whole rover: the driver here, GPS fusion in rover-a1-platform.
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)

@@ -291,7 +291,8 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 |----------|---------|---------|--------|
 | `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
 | `ROVER_START_NAVIGATION` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
-| `ROVER_START_MISSION_MANAGER` | `true` | orchestrator | `false` runs Nav 2 without `rover_mission_manager`. Only consulted when the orchestrator stack starts at all. |
+| `ROVER_START_MISSION_MANAGER` | `false` | orchestrator | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. |
+| `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. |
 
 ### Robot configuration
 
@@ -299,7 +300,6 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 |----------|---------|---------|--------|
 | `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
 | `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF publishing `map → odom`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
-| `ROVER_START_SENSORS` | `true` | sensors | `false` idles `rover-a1-sensors` (no drivers at all). |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
 | `ROVER_LAN_IP` | `192.168.1.201` | platform | Rover LAN address the Zenoh router binds. |
 | `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps` or `slam`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox) requires `ROVER_USE_GPS=false` — exactly one process may publish `map → odom`. An unrecognized value is ignored with a warning. |
@@ -342,6 +342,11 @@ service restarts only that service; an all-services device variable restarts eve
 Note that `ROVER_START_ROS_PLATFORM` is read by two services. Scoping it to `rover-a1-platform`
 alone stops the bringup but leaves the orchestrator believing it is still running — set it as
 an all-services variable, or set `ROVER_START_NAVIGATION=false` alongside it.
+`ROVER_USE_GPS` is read by three services (sensors: driver, platform: fusion, orchestrator:
+`localization_source`); set it as an all-services variable so they agree.
+
+With the defaults only `rover-a1-platform` runs its stack; the orchestrator and the sensor
+payload idle until `ROVER_START_NAVIGATION` / `ROVER_START_SENSORS` are set to `true`.
 
 ## Where the orchestrator runs
 
@@ -355,7 +360,7 @@ It starts that stack only when **both** hold:
 
 | `ROVER_START_ROS_PLATFORM` | `ROVER_START_NAVIGATION` | Result |
 |---|---|---|
-| `true` | `true` | Nav 2 starts (+ mission manager unless `ROVER_START_MISSION_MANAGER=false`) |
+| `true` | `true` | Nav 2 starts (+ mission manager with `ROVER_START_MISSION_MANAGER=true`) |
 | *any* | `false` | idle — navigation not requested on this device (also the setting when a companion controller runs the stack) |
 | `false` | `true` | idle — no platform bringup to navigate with |
 
