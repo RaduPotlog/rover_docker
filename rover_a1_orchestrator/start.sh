@@ -36,7 +36,7 @@ norm_bool() {
 }
 
 ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=$(norm_bool "${ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER:-}" false)
-ROVER_START_BRINGUP=$(norm_bool "${ROVER_START_BRINGUP:-}" true)
+ROVER_START_ROVER_ROS=$(norm_bool "${ROVER_START_ROVER_ROS:-}" true)
 ROVER_START_NAV_BRINGUP=$(norm_bool "${ROVER_START_NAV_BRINGUP:-}" false)
 ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" true)
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
@@ -47,14 +47,14 @@ ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 START_ORCHESTRATOR=false
 DISABLED_REASON=""
 if [ "$ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER" = false ]; then
-  if [ "$ROVER_START_BRINGUP" = true ]; then
+  if [ "$ROVER_START_ROVER_ROS" = true ]; then
     if [ "$ROVER_START_NAV_BRINGUP" = true ]; then
       START_ORCHESTRATOR=true
     else
       DISABLED_REASON="ROVER_START_NAV_BRINGUP=false (navigation not requested)"
     fi
   else
-    DISABLED_REASON="ROVER_START_BRINGUP=false (no platform bringup to navigate with)"
+    DISABLED_REASON="ROVER_START_ROVER_ROS=false (no platform bringup to navigate with)"
   fi
 else
   DISABLED_REASON="ROVER_ORCHESTRATOR_ON_COMPANION_CONTROLLER=true (the stack runs off-device)"

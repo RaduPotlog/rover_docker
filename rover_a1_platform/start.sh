@@ -4,16 +4,16 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
-# Toggle whether the rover_bringup launch is started at all. Set ROVER_START_BRINGUP as a
+# Toggle whether the rover_bringup launch is started at all. Set ROVER_START_ROVER_ROS as a
 # balenaCloud device/fleet variable (true/false); unset or empty means true. Changing the
 # variable makes the balena supervisor restart this container, which re-reads it here.
-case "${ROVER_START_BRINGUP:-true}" in
-  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_START_BRINGUP=true ;;
-  *) ROVER_START_BRINGUP=false ;;
+case "${ROVER_START_ROVER_ROS:-true}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_START_ROVER_ROS=true ;;
+  *) ROVER_START_ROVER_ROS=false ;;
 esac
 
 # Localization mode for rover_bringup (read there through the ROVER_USE_GPS environment variable).
-# Normalized like ROVER_START_BRINGUP so the launch files only ever see true/false; unset or
+# Normalized like ROVER_START_ROVER_ROS so the launch files only ever see true/false; unset or
 # empty means false (wheels + IMU), true adds the RUTX11 GPS (dual EKF).
 case "${ROVER_USE_GPS:-false}" in
   [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_USE_GPS=true ;;
@@ -120,13 +120,13 @@ fi
 # (rover_modbus, rover_cppuprofile). Prepending it made it shadow the ROS libs the
 # workspace was compiled against, since LD_LIBRARY_PATH beats their RUNPATH.
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-if [ "$ROVER_START_BRINGUP" = true ]; then
+if [ "$ROVER_START_ROVER_ROS" = true ]; then
   nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
   ROVER_PID=$!
   CHILD_PIDS+=("$ROVER_PID")
   echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_USE_GPS=$ROVER_USE_GPS)"
 else
-  echo "Rover bringup disabled (ROVER_START_BRINGUP=false); skipping"
+  echo "Rover bringup disabled (ROVER_START_ROVER_ROS=false); skipping"
 fi
 
 # Optional short delay to let rover nodes initialize before the bridges connect
@@ -158,7 +158,7 @@ EXIT_CODE=0
 wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
 STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "web_bridges:$BRIDGES_PID")
-if [ "$ROVER_START_BRINGUP" = true ]; then
+if [ "$ROVER_START_ROVER_ROS" = true ]; then
   STATUS_ENTRIES+=("rover_bringup:$ROVER_PID")
 fi
 
