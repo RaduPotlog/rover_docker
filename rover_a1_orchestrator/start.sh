@@ -41,6 +41,8 @@ ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" false
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_GPS_PUBLISH_MAP_TF=$(norm_bool "${ROVER_GPS_PUBLISH_MAP_TF:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
+# true only when the platform is rover_gazebo (Gazebo publishes /clock); never on the rover.
+ROVER_USE_SIM_TIME=$(norm_bool "${ROVER_USE_SIM_TIME:-}" false)
 
 # The orchestrator stack runs on this device only when navigation is requested here AND the
 # platform bringup it drives is actually running. To run the stack on a companion controller
@@ -136,7 +138,7 @@ ROVER_NAV_MAP=${ROVER_NAV_MAP:-/root/ros2_ws/rover_a1/install/rover_navigation/s
 # ROVER_NAMESPACE themselves: rover_mission_manager must be launched with the same
 # localization_source as rover_navigation, and passing both proves they agree.
 nohup ros2 launch rover_navigation bringup.launch.py \
-  use_sim_time:=False \
+  use_sim_time:="${ROVER_USE_SIM_TIME}" \
   namespace:="${ROVER_NAMESPACE}" \
   localization_source:="${LOCALIZATION_SOURCE}" \
   map:="${ROVER_NAV_MAP}" \
@@ -148,7 +150,7 @@ echo "Nav 2 bringup started in background (PID: $NAV_PID, localization_source=$L
 # **Mission manager - Background**
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
   nohup ros2 launch rover_mission_manager rover_mission_manager.launch.py \
-    use_sim_time:=False \
+    use_sim_time:="${ROVER_USE_SIM_TIME}" \
     namespace:="${ROVER_NAMESPACE}" \
     localization_source:="${LOCALIZATION_SOURCE}" \
     > /tmp/rover_mission_manager.log 2>&1 < /dev/null &
