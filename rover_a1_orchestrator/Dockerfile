@@ -131,30 +131,9 @@ RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orc
 RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
 
 # autonomy_deps.repos brings pointcloud_crop_box - the self-filter for rover_navigation's
-# `pointcloud` observation path, source-only so it cannot come from rosdep. It also pins
-# navigation2 (via the RaduPotlog/rover_navigation fork), for
-# nav2_smac_planner - planner_server's GridBased plugin, and the one nav2_* package with no
-# arm64 binary on lyrical/resolute.
-# vcstool cannot express a sparse checkout, so prune the import down to that single package.
-#
-# Mandatory, not an optimization, for two independent reasons:
-#   - rosdep resolves the `nav2_smac_planner` key to ros-${ROS_DISTRO}-nav2-smac-planner,
-#     which does not exist on arm64. The -i below only skips it because the package is
-#     present in src/, so without this checkout the rosdep layer fails outright.
-#   - `--packages-up-to rover_autonomy` follows rover_navigation's exec_depends. Unpruned,
-#     colcon finds 46 packages in this import instead of 1, so it rebuilds the whole Nav 2
-#     stack from source on top of the debs, and rosdep resolves those packages' deps rather
-#     than installing the debs at all - measured: ros-gz-bridge, nav2-minimal-tb3-sim,
-#     nav2-minimal-tb4-sim and qt6-scxml-dev, in an image with no GUI and no simulator.
-#
-# src/rover_navigation, not src/third_party/rover_navigation: vcs import derives the directory
-# from the .repos key. That directory is the Nav 2 fork, not the rover's own rover_navigation
-# package, which lives in src/rover_orchestrator/rover_navigation. Folded into the same RUN as
-# the import because Docker layers are additive - pruning in a later layer would leave the full
-# tree committed in this one and reclaim nothing.
-RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos \
-    && git -C src/rover_navigation sparse-checkout init --cone \
-    && git -C src/rover_navigation sparse-checkout set nav2_smac_planner
+# `pointcloud` observation path, source-only so it cannot come from rosdep. Every nav2_*
+# package, nav2_smac_planner included, is an arm64 deb and comes from the rosdep pass below.
+RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
@@ -163,9 +142,8 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # GPS drivers are not in rover_ros any more (they are the rover_sensors payload, built by
 # rover-a1-sensors). src/rover_pointcloud_crop_box must stay in src/ so -i ignores its
 # `pointcloud_crop_box` key.
-# Pulls the Nav 2 stack, slam_toolbox, spatio_temporal_voxel_layer and behaviortree_cpp.
-# nav2_smac_planner is the one exception: -i skips it because the pruned checkout above
-# put it in src/, and colcon builds it from source instead.
+# Pulls the Nav 2 stack (nav2_smac_planner included), slam_toolbox,
+# spatio_temporal_voxel_layer and behaviortree_cpp.
 #
 # apt-get update belongs in this same RUN: the ros-base layer above ends with
 # `rm -rf /var/lib/apt/lists/*`, and rosdep does not refresh the index itself - it shells out

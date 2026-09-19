@@ -64,16 +64,6 @@ dependencies. `ROS_DISTRO=lyrical` is baked into the image and
 used for package installation, rosdep, compilation, and startup; do not
 override it with a different distribution at runtime.
 
-The orchestrator build is the slow one. Besides the workspace itself it
-compiles `nav2_smac_planner` from source — `planner_server`'s `GridBased`
-plugin, and the only `nav2_*` package with no arm64 binary on
-lyrical/resolute. `autonomy_deps.repos` pins it at tag `1.5.1` of
-[`rover_navigation`](https://github.com/RaduPotlog/rover_navigation), our
-navigation2 fork, to match the Nav 2 debs, and the Dockerfile prunes that import to the single
-package with `git sparse-checkout`. Budget roughly eight extra minutes on
-arm64; the build is not stuck. Its `ros2 pkg prefix` below must report the
-workspace install tree, not `/opt/ros/lyrical`.
-
 Check the built image without starting hardware bringup:
 
 ```bash
@@ -91,7 +81,8 @@ docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
 
 The orchestrator image builds `rover_orchestrator` (plus the parts of `rover_ros` it
 depends on) with `colcon build --packages-up-to rover_autonomy`, so the hardware packages
-are never compiled there. Check it the same way:
+are never compiled there. Every `nav2_*` package, `nav2_smac_planner` included, comes from
+the arm64 debs, so its prefix below is `/opt/ros/lyrical`. Check it the same way:
 
 ```bash
 docker run --rm --platform linux/arm64 --entrypoint /bin/bash \
