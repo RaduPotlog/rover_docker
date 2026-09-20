@@ -12,7 +12,7 @@ service's build context in `docker-compose.yml`:
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
-| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 222. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
+| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 222 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
 
 ```
@@ -168,7 +168,7 @@ All containers use host networking, so these bind directly to the device:
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
-| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **both** ROS services |
+| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **all three** ROS services |
 | 10110/udp | RUTX11 NMEA forwarding → GNSS driver (`rover-a1-sensors`) |
 | 6699/udp, 7788/udp | RoboSense RS16 MSOP / DIFOP → lidar driver (`rover-a1-sensors`) |
 | 48484  | balena supervisor              |
@@ -209,22 +209,23 @@ Two caveats, both inherited from `rover-a1-platform` and neither specific to thi
 Neither is a regression — it is the arrangement port 22 has always had — but 2222 doubles the
 surface, so it is worth stating.
 
-### Claude Code on the 2222 shell
+### Claude Code on the 2222 and 222 shells
 
-The orchestrator image carries the same Claude tooling as `rover-a1-platform` — the
+The orchestrator and sensors images carry the same Claude tooling as `rover-a1-platform` — the
 `@anthropic-ai/claude-code` CLI plus `ros-mcp`, registered at user scope at build time — so
-`claude` works identically on either shell. Run it from the 2222 session when the thing you
-are debugging is Nav 2, the costmaps or the mission manager.
+`claude` works identically on all three shells. Run it from the 2222 session when the thing you
+are debugging is Nav 2, the costmaps or the mission manager, and from the 222 session when it
+is the GNSS or lidar payload.
 
 - **One-time login.** `claude` prompts for authentication on first run. The credential is
   written to `/root/.claude.json` **inside the container**, so it does not survive a container
   recreate — every balena release means logging in again. If that friction bites, declare an
-  unset `ANTHROPIC_API_KEY` on both ROS services in `docker-compose.yml` and set it as a
+  unset `ANTHROPIC_API_KEY` on all three ROS services in `docker-compose.yml` and set it as a
   balenaCloud variable instead.
 - **ros-mcp needs `rover-a1-platform` running.** It reaches rosbridge at `127.0.0.1:9090`,
-  which is served by that container — host networking gives the two services one namespace,
-  which is why the orchestrator runs no rosbridge of its own. With the platform stopped,
-  `claude mcp list` shows ros-mcp failing to connect.
+  which is served by that container — host networking gives the three services one namespace,
+  which is why neither the orchestrator nor sensors runs a rosbridge of its own. With the
+  platform stopped, `claude mcp list` shows ros-mcp failing to connect.
 
 ## Sensors SSH
 
@@ -237,8 +238,9 @@ ssh -p 222 root@<rover-lan-ip>      # sensors: GNSS + lidar drivers
 
 As in the orchestrator, `start.sh` starts sshd ahead of the `ROVER_START_SENSORS` gate, so the
 shell is up while the payload idles, and a dead sshd restarts the service. The caveats above
-(image-default password, host keys shared per build) apply here too. The image carries no
-Claude tooling; use the 22 or 2222 shell for that.
+(image-default password, host keys shared per build) apply here too, as does everything in
+[Claude Code on the 2222 and 222 shells](#claude-code-on-the-2222-and-222-shells): this image
+carries the same `claude` and `ros-mcp` as the other two.
 
 ## ROS 2 diagnostics (Cockpit)
 
