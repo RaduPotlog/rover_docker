@@ -120,6 +120,12 @@ RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
+# map_autosaver writes <map_directory>.yaml/.pgm here while slam_toolbox is running, and
+# localization_source:=amcl reads the result back via ROVER_NAV_MAP. nav2's map_saver does
+# not create parent directories, so the directory has to exist in the image. Mount a named
+# volume over it (docker-compose.yml) or the map dies with the container.
+RUN mkdir -p /maps
+
 # Both repositories track their master branch by default, so every `--nocache` build picks
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
@@ -147,8 +153,10 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # GPS drivers are not in rover_ros any more (they are the rover_sensors payload, built by
 # rover-a1-sensors). src/rover_pointcloud_crop_box must stay in src/ so -i ignores its
 # `pointcloud_crop_box` key.
-# Pulls the Nav 2 stack (nav2_smac_planner included), slam_toolbox,
-# spatio_temporal_voxel_layer and behaviortree_cpp.
+# Pulls the Nav 2 stack (nav2_smac_planner and nav2_amcl included), slam_toolbox,
+# spatio_temporal_voxel_layer and behaviortree_cpp. nav2_amcl arrives because
+# rover_navigation declares it - localization_source:=amcl launches it - so it needs no
+# entry here, but it does need an image rebuild to appear.
 #
 # apt-get update belongs in this same RUN: the ros-base layer above ends with
 # `rm -rf /var/lib/apt/lists/*`, and rosdep does not refresh the index itself - it shells out

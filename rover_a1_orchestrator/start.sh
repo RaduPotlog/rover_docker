@@ -69,8 +69,10 @@ fi
 # Nav 2's global frame owner. ROVER_USE_GPS decides it by default - 'gps' means
 # rover_ekf_global_node (rover-a1-platform) publishes map -> odom (needs
 # ROVER_GPS_PUBLISH_MAP_TF=true), 'odom' means nobody does and navigation is odometry-relative.
-# ROVER_LOCALIZATION_SOURCE overrides that, and is the only way to reach 'slam' (slam_toolbox,
-# which requires ROVER_USE_GPS=false or ROVER_GPS_PUBLISH_MAP_TF=false).
+# ROVER_LOCALIZATION_SOURCE overrides that, and is the only way to reach 'slam' (slam_toolbox)
+# or 'amcl' (nav2_amcl, the indoor mode) - both require ROVER_USE_GPS=false or
+# ROVER_GPS_PUBLISH_MAP_TF=false. Deliberately not auto-selected: flipping an existing
+# odom-mode rover into amcl would hard-fail it, since amcl needs a map that odom never had.
 if [ "$ROVER_USE_GPS" = true ]; then
   LOCALIZATION_SOURCE=gps
 else
@@ -78,18 +80,25 @@ else
 fi
 if [ -n "${ROVER_LOCALIZATION_SOURCE:-}" ]; then
   case "$ROVER_LOCALIZATION_SOURCE" in
-    odom|gps|slam)
+    odom|gps|slam|amcl)
       LOCALIZATION_SOURCE="$ROVER_LOCALIZATION_SOURCE"
       ;;
     *)
-      echo "WARNING: ROVER_LOCALIZATION_SOURCE='${ROVER_LOCALIZATION_SOURCE}' is not one of odom|gps|slam; using '${LOCALIZATION_SOURCE}'"
+      echo "WARNING: ROVER_LOCALIZATION_SOURCE='${ROVER_LOCALIZATION_SOURCE}' is not one of odom|gps|slam|amcl; using '${LOCALIZATION_SOURCE}'"
       ;;
   esac
 fi
 # Exactly one process may publish map -> odom. With ROVER_GPS_PUBLISH_MAP_TF=false the GPS
-# global EKF still fuses but leaves map -> odom to slam_toolbox (or AMCL).
-if [ "$LOCALIZATION_SOURCE" = slam ] && [ "$ROVER_USE_GPS" = true ] && [ "$ROVER_GPS_PUBLISH_MAP_TF" = true ]; then
-  echo "WARNING: localization_source=slam with ROVER_USE_GPS=true - slam_toolbox and rover_ekf_global_node would both publish map -> odom (set ROVER_GPS_PUBLISH_MAP_TF=false)"
+# global EKF still fuses but leaves map -> odom to slam_toolbox or AMCL.
+if { [ "$LOCALIZATION_SOURCE" = slam ] || [ "$LOCALIZATION_SOURCE" = amcl ]; } \
+   && [ "$ROVER_USE_GPS" = true ] && [ "$ROVER_GPS_PUBLISH_MAP_TF" = true ]; then
+  echo "WARNING: localization_source=${LOCALIZATION_SOURCE} with ROVER_USE_GPS=true - ${LOCALIZATION_SOURCE} and rover_ekf_global_node would both publish map -> odom (set ROVER_GPS_PUBLISH_MAP_TF=false)"
+fi
+# AMCL matches the lidar scan against the static map; without a scan it never localizes and
+# never publishes map -> odom, so Nav 2 cannot resolve its global frame at all. This is more
+# severe than the generic "costmaps stay empty" warning further down.
+if [ "$LOCALIZATION_SOURCE" = amcl ] && [ "$ROVER_USE_LIDAR" != true ]; then
+  echo "WARNING: localization_source=amcl with ROVER_USE_LIDAR=false - AMCL has no scan to match, will never localize, and nothing will publish map -> odom"
 fi
 if [ "$LOCALIZATION_SOURCE" = gps ] && [ "$ROVER_GPS_PUBLISH_MAP_TF" != true ]; then
   echo "WARNING: localization_source=gps with ROVER_GPS_PUBLISH_MAP_TF=false - nothing publishes map -> odom, so Nav 2 cannot resolve its global frame"
@@ -130,6 +139,15 @@ sleep 1
 
 ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
 ROVER_NAV_MAP=${ROVER_NAV_MAP:-/root/ros2_ws/rover_a1/install/rover_navigation/share/rover_navigation/map/empty_world.yaml}
+
+# The default map is 50x50 m of free space. Every AMCL particle scores identically against it,
+# so the filter never converges and the rover reports a pose it has no evidence for. This is
+# the single most likely amcl misconfiguration, hence its own check.
+case "$LOCALIZATION_SOURCE:$ROVER_NAV_MAP" in
+  amcl:*empty_world.yaml)
+    echo "WARNING: localization_source=amcl with the default empty_world.yaml - AMCL cannot localize against an empty map. Build one first with ROVER_LOCALIZATION_SOURCE=slam, then set ROVER_NAV_MAP=/maps/map.yaml"
+    ;;
+esac
 
 # **Nav 2 - Background**
 # namespace and localization_source are passed explicitly even though both launch files read
