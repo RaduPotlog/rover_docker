@@ -41,6 +41,14 @@ services:
       io.balena.features.supervisor-api: '1'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
+    # rover_crsf_teleop writes the measured RC stick calibration to
+    # /config/rover_crsf_teleop/rc_calibration.yaml when an operator applies one from the Cockpit
+    # RC page. A named volume, not a bind mount, for the same reason as rover-maps: a balenaOS
+    # device filesystem is read-only outside one. It survives container restarts and image
+    # updates, but not a device reprovision - copy it off with
+    # `scp root@<device>:/config/rover_crsf_teleop/rc_calibration.yaml .` (sshd is on port 22).
+    volumes:
+      - rover-config:/config
     environment:
       ROVER_NAMESPACE: 'rover'
       ROVER_START_ROS_PLATFORM: 'true'
@@ -221,6 +229,9 @@ services:
       start_period: 10s
       retries: 3
 
-# Persists the SLAM map across container restarts for localization_source=amcl.
 volumes:
+  # Persists the SLAM map across container restarts for localization_source=amcl.
   rover-maps:
+  # Persists the measured RC stick calibration. Only rover-a1-platform needs it: the Cockpit page
+  # reaches the calibration through the node's rc/calibration services, never by reading the file.
+  rover-config:
