@@ -67,8 +67,13 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Baked into the image at build time, so the robot needs no PyPI fetch at runtime.
-RUN uv tool install ros-mcp
+# Baked into the image at build time, so the robot needs no PyPI fetch at runtime. fastmcp is
+# held below 4 deliberately: ros-mcp 3.1.0 asks only for `fastmcp>=2.11.3`, but fastmcp 4 moved
+# `fastmcp.tools.tool` to `fastmcp.tools.base`, so an unconstrained install resolves fastmcp 4
+# and ros-mcp dies on import with ModuleNotFoundError - which Claude Code reports only as a
+# CONNECTION_CLOSED server. Drop the constraint once ros-mcp ships fastmcp 4 support; ros-mcp
+# itself stays unpinned, so rebuilds still pick up new releases.
+RUN uv tool install ros-mcp --with "fastmcp<4"
 
 # Registered at user scope so it is available no matter which directory `claude` is started
 # from over SSH. ros-mcp reaches rosbridge at 127.0.0.1:9090, which runs in
