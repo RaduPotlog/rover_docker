@@ -14,6 +14,7 @@ service's build context in `docker-compose.yml`:
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 222 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
+| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). See [Drive interface](#drive-interface) |
 
 ```
 rover_docker/
@@ -27,9 +28,14 @@ rover_docker/
 ├── rover_a1_sensors/
 │   ├── Dockerfile
 │   └── start.sh
-└── rover_cockpit/
+├── rover_cockpit/
+│   ├── Dockerfile
+│   ├── cockpit.conf
+│   ├── healthcheck.sh
+│   └── start.sh
+└── rover_a1_drive_interface/
     ├── Dockerfile
-    ├── cockpit.conf
+    ├── nginx.conf.template
     ├── healthcheck.sh
     └── start.sh
 ```
@@ -46,6 +52,8 @@ bash -n rover_a1_orchestrator/start.sh
 bash -n rover_a1_sensors/start.sh
 bash -n rover_cockpit/start.sh
 bash -n rover_cockpit/healthcheck.sh
+bash -n rover_a1_drive_interface/start.sh
+bash -n rover_a1_drive_interface/healthcheck.sh
 docker compose config --quiet
 docker buildx inspect --bootstrap
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
@@ -56,6 +64,8 @@ docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-a1-sensors:lyrical ./rover_a1_sensors
 docker buildx build --platform linux/arm64 --pull --no-cache --load \
   -t rover-cockpit:lyrical ./rover_cockpit
+docker buildx build --platform linux/arm64 --pull --no-cache --load \
+  -t rover-a1-drive-interface:lyrical ./rover_a1_drive_interface
 ```
 
 The application build defaults to the `rover_ros` **master** branch and
@@ -175,6 +185,7 @@ All containers use host networking, so these bind directly to the device:
 | 2222   | sshd (`rover-a1-orchestrator`)       |
 | 222    | sshd (`rover-a1-sensors`)            |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
+| 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **all three** ROS services |
@@ -293,6 +304,44 @@ opens directly. It replaces the former `rover-web-server` dashboard. It has thre
   `CAP_NET_RAW` (for the Networking tab's `ping`); if the page shows
   "disconnected", check foxglove_bridge on port 8765 in `rover-a1-platform`
   (`ss -ltnp | grep 8765` on the host).
+
+## Drive interface
+
+`rover-a1-drive-interface` serves a Clearpath Boxer / IndoorNav-style drive UI from
+[`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface). Open
+`http://<rover-lan-ip>:5000/` (the Boxer's OTTO App and IndoorNav use the same port) and log
+in. It is built for one rover and indoor navigation.
+
+- **Transport:** nginx serves the page and proxies the same-origin websocket `/ws` to
+  foxglove_bridge on `127.0.0.1:8765`. Both sit behind the same basic-auth login, because
+  foxglove_bridge itself has no authentication. The container runs no ROS.
+- **Neutral / Manual:** the page starts in **Neutral** and publishes nothing. **Manual**
+  publishes `<ns>/teleop_foxglove_cmd_vel_stamped` at 10 Hz (twist_mux priority 100, above
+  Nav 2). It sends zeros while the stick is centred, so the UI holds the base.
+- **Deadman:** hiding the tab, losing focus or losing the connection stops publishing,
+  and twist_mux's 0.5 s timeout stops the rover. Hiding the tab or a lost connection also drops
+  the page back to Neutral.
+- **Gamepad:** a pad drives only while L1/LB is held.
+- **Other controls:** e-stop buttons call the `hardware_interface/sw_*` Trigger services.
+- **Top bar:** safety (e-stop, latch, `motion_lock`), diagnostics, battery and
+  link latency (a round trip through `/rosapi/get_time`).
+
+### Drive interface variables
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ROVER_DRIVE_ENABLE` | `true` | `false` = the container idles. |
+| `ROVER_DRIVE_PORT` | `5000` | Port nginx binds (plain http). |
+| `ROVER_DRIVE_USER` | `rover` | Login user. |
+| `ROVER_DRIVE_PASSWORD` | *(unset)* | Required. The container refuses to start without it. |
+| `ROVER_DRIVE_MAX_LINEAR` / `_ANGULAR` | `1.0` / `1.0` | 100 % speed preset in m/s / rad/s; the presets are 20/50/80/100 % of it. The drive controller clamps at 1.2 m/s, 1.0 rad/s. |
+
+Limitations:
+
+- The balena Public Device URL only forwards port 80, which is Cockpit, so the drive
+  interface is reachable on the rover LAN only.
+- A page served over https would need `wss`; nginx already builds the websocket URL from the
+  page scheme, so a TLS proxy in front of port 5000 works unchanged.
 
 ## Device variables
 

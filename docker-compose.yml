@@ -23,6 +23,8 @@ version: '2.4'
 # ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
 #                              body_link; unset = URDF default
 # ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit won't start
+# ROVER_DRIVE_*                drive-interface: on/off, http port, login, teleop speed limits (m/s, rad/s);
+#                              no password = the drive interface won't start
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
 # platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
@@ -86,6 +88,12 @@ services:
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
       ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
@@ -136,6 +144,12 @@ services:
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
       ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -179,6 +193,12 @@ services:
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
       ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
   rover-cockpit:
     build:
       context: ./rover_cockpit
@@ -224,9 +244,71 @@ services:
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
       ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
     healthcheck:
       # A script in the image reads ROVER_COCKPIT_PORT at run time. No `$` here: balena's
       # compose parser mangles `$$`, which made this check fail forever and restart cockpit.
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  rover-a1-drive-interface:
+    build:
+      context: ./rover_a1_drive_interface
+    restart: always
+    network_mode: host
+    environment:
+      ROVER_NAMESPACE: 'rover'
+      ROVER_START_ROS_PLATFORM: 'true'
+      ROVER_START_NAVIGATION: 'false'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_SENSORS: 'false'
+      ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
+      ROVER_USE_LIDAR: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
+      ROVER_GPS_LOCALIZATION_X:
+      ROVER_GPS_LOCALIZATION_Y:
+      ROVER_GPS_LOCALIZATION_Z:
+      ROVER_GPS_ORIENTATION_R:
+      ROVER_GPS_ORIENTATION_P:
+      ROVER_GPS_ORIENTATION_Y:
+      ROVER_IMU_LOCALIZATION_X:
+      ROVER_IMU_LOCALIZATION_Y:
+      ROVER_IMU_LOCALIZATION_Z:
+      ROVER_IMU_ORIENTATION_R:
+      ROVER_IMU_ORIENTATION_P:
+      ROVER_IMU_ORIENTATION_Y:
+      ROVER_LIDAR_LOCALIZATION_X:
+      ROVER_LIDAR_LOCALIZATION_Y:
+      ROVER_LIDAR_LOCALIZATION_Z:
+      ROVER_LIDAR_ORIENTATION_R:
+      ROVER_LIDAR_ORIENTATION_P:
+      ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_COCKPIT_PORT: '80'
+      ROVER_COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
+    healthcheck:
+      # Script in the image (reads ROVER_DRIVE_PORT); no `$` here, see rover-cockpit.
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s

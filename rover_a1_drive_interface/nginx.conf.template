@@ -1,0 +1,71 @@
+# rover-a1-drive-interface: serves the drive UI and proxies the foxglove_bridge websocket.
+# Rendered by start.sh (envsubst on ${ROVER_DRIVE_PORT} and ${ROVER_DRIVE_BRIDGE}).
+worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+    worker_connections 256;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log off;
+    sendfile on;
+    server_tokens off;
+
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    server {
+        # network_mode: host - this is the rover's port 5000, as on the Boxer (OTTO App)
+        # and Clearpath IndoorNav.
+        listen ${ROVER_DRIVE_PORT};
+
+        root /usr/share/nginx/drive;
+        index index.html;
+
+        # foxglove_bridge has no authentication of its own, so it is only reachable through
+        # here, behind the same login as the page. Browsers resend the page's basic-auth
+        # credentials on the same-origin websocket upgrade.
+        auth_basic "Rover drive interface";
+        auth_basic_user_file /etc/nginx/drive.htpasswd;
+
+        location = /healthz {
+            auth_basic off;
+            default_type text/plain;
+            return 200 "ok\n";
+        }
+
+        location = /ws {
+            proxy_pass http://${ROVER_DRIVE_BRIDGE}/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            # Sec-WebSocket-Protocol (foxglove.sdk.v1 / foxglove.websocket.v1) is forwarded as-is.
+            # The bridge streams continuously; the teleop loop sends at 10 Hz. Long timeouts
+            # so an idle map view is not cut off.
+            proxy_read_timeout 1h;
+            proxy_send_timeout 1h;
+            proxy_buffering off;
+        }
+
+        location = /config.json {
+            add_header Cache-Control "no-store";
+            alias /tmp/drive-config.json;
+        }
+
+        location /assets/ {
+            add_header Cache-Control "public, max-age=31536000, immutable";
+        }
+
+        location / {
+            add_header Cache-Control "no-cache";
+            try_files $uri $uri/ /index.html;
+        }
+    }
+}
