@@ -13,8 +13,8 @@ service's build context in `docker-compose.yml`:
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 24 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
-| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices), plus an sshd on port 26 |
-| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25. See [Drive interface](#drive-interface) |
+| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices), plus an sshd on port 26 and the Claude Code CLI with `ros-mcp` registered |
+| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25 and the Claude Code CLI with `ros-mcp` registered. See [Drive interface](#drive-interface) |
 
 ```
 rover_docker/
@@ -190,7 +190,7 @@ All containers use host networking, so these bind directly to the device:
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
-| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **all three** ROS services |
+| 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **every** container |
 | 10110/udp | RUTX11 NMEA forwarding → GNSS driver (`rover-a1-sensors`) |
 | 6699/udp, 7788/udp | RoboSense RS16 MSOP / DIFOP → lidar driver (`rover-a1-sensors`) |
 | 48484  | balena supervisor              |
@@ -237,22 +237,24 @@ shell (23–26) widens the surface, so it is worth stating.
 After an image rebuild the host keys change, so `ssh` warns "host key changed" once per port;
 clear the old entry with `ssh-keygen -R '[<rover-lan-ip>]:<port>'` (plain `<rover-lan-ip>` for 22).
 
-### Claude Code on the orchestrator and sensors shells
+### Claude Code and ros-mcp on every shell
 
-The orchestrator and sensors images carry the same Claude tooling as `rover-a1-platform` — the
-`@anthropic-ai/claude-code` CLI plus `ros-mcp`, registered at user scope at build time — so
-`claude` works identically on all three shells. Run it from the port-24 session when the thing
-you are debugging is Nav 2, the costmaps or the mission manager, and from the port-23 session
-when it is the GNSS or lidar payload.
+Every image carries the same Claude tooling: the `@anthropic-ai/claude-code` CLI plus `ros-mcp`
+(with the `fastmcp<4` pin), registered at user scope at build time. So `claude` works
+identically on all five SSH shells: platform 22, sensors 23, orchestrator 24,
+drive-interface 25 and cockpit 26. Use the shell of the container you are debugging:
+- port 24 for Nav 2, the costmaps or the mission manager;
+- port 23 for the GNSS or lidar payload;
+- port 22 for the drivers and bringup.
 
 - **One-time login.** `claude` prompts for authentication on first run. The credential is
   written to `/root/.claude.json` **inside the container**, so it does not survive a container
   recreate — every balena release means logging in again. If that friction bites, declare an
-  unset `ANTHROPIC_API_KEY` on all three ROS services in `docker-compose.yml` and set it as a
+  unset `ANTHROPIC_API_KEY` on every service in `docker-compose.yml` and set it as a
   balenaCloud variable instead.
 - **ros-mcp needs `rover-a1-platform` running.** It reaches rosbridge at `127.0.0.1:9090`,
-  which is served by that container — host networking gives the three services one namespace,
-  which is why neither the orchestrator nor sensors runs a rosbridge of its own. With the
+  which is served by that container — host networking gives every service one namespace,
+  which is why no other container runs a rosbridge of its own. With the
   platform stopped, `claude mcp list` shows ros-mcp failing to connect.
 
 ## Sensors SSH
@@ -267,8 +269,8 @@ ssh -p 23 root@<rover-lan-ip>       # sensors: GNSS + lidar drivers
 As in the orchestrator, `start.sh` starts sshd ahead of the `ROVER_START_SENSORS` gate, so the
 shell is up while the payload idles, and a dead sshd restarts the service. The caveats above
 (image-default password, host keys shared per build) apply here too, as does everything in
-[Claude Code on the orchestrator and sensors shells](#claude-code-on-the-orchestrator-and-sensors-shells): this image
-carries the same `claude` and `ros-mcp` as the other two.
+[Claude Code and ros-mcp on every shell](#claude-code-and-ros-mcp-on-every-shell): this image
+carries the same `claude` and `ros-mcp` as the others.
 
 ## Cockpit SSH
 
@@ -284,6 +286,7 @@ ssh -p 26 root@<rover-lan-ip>       # cockpit: cockpit-ws, /etc/cockpit, the pri
 container restarts. Without `ROVER_COCKPIT_PASSWORD` (or with `ROVER_COCKPIT_USER=root`) the
 container now **idles** with only sshd running instead of exiting, and leaves
 `/tmp/rover-cockpit-idle`, which the healthcheck accepts, so the shell stays reachable to fix it.
+It carries `claude` and `ros-mcp` like every other container.
 
 ## ROS 2 diagnostics (Cockpit)
 
@@ -374,7 +377,7 @@ When `ROVER_DRIVE_ENABLE=false`, or `ROVER_DRIVE_PASSWORD` is unset, the contain
 with only sshd running instead of exiting. It leaves `/tmp/drive-interface-idle`, which the
 healthcheck accepts, so balenaEngine does not restart the idle container as unhealthy. The
 caveats of the other shells apply here too: an image-default password, and host keys shared
-per build. This image has no ROS, `claude` or `ros-mcp`.
+per build. The image runs no ROS itself, but carries `claude` and `ros-mcp` like the others (see [Claude Code and ros-mcp on every shell](#claude-code-and-ros-mcp-on-every-shell)).
 
 ### Drive interface variables
 

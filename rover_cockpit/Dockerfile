@@ -55,6 +55,36 @@ RUN echo 'root:root' | chpasswd \
     && printf 'Port 26\nPermitRootLogin yes\nUsePAM no\n' \
        > /etc/ssh/sshd_config.d/rover_cockpit.conf
 
+##################################### Claude Code + ros-mcp ##############################
+
+# Same tooling as the other rover images (see rover_a1_orchestrator/Dockerfile), so `claude`
+# with ros-mcp works on every container's SSH shell. Above the app layers so a web-app change
+# does not rebuild these.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @anthropic-ai/claude-code
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+# fastmcp is held below 4 deliberately: ros-mcp 3.1.0 asks only for `fastmcp>=2.11.3`, but
+# fastmcp 4 moved `fastmcp.tools.tool`, so an unconstrained install dies on import - which Claude
+# Code reports only as a CONNECTION_CLOSED server. uv brings its own Python when the image has none.
+RUN uv tool install ros-mcp --with "fastmcp<4"
+
+# ros-mcp reaches rosbridge at 127.0.0.1:9090 in rover-a1-platform: every service is
+# network_mode: host, so no rosbridge is needed here.
+RUN claude mcp add ros-mcp --scope user -- ros-mcp --transport=stdio
+
+# ENV PATH reaches `docker exec`, but sshd builds a fresh environment for login shells, so
+# without this `ros-mcp` is off PATH over SSH and Claude fails to spawn the MCP server.
+# profile.d as well as .bashrc: a login shell reads /etc/profile (-> profile.d) even when the
+# base image ships no /root/.profile to source .bashrc.
+RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc \
+    && echo 'export PATH="$PATH:/root/.local/bin"' > /etc/profile.d/rover-local-bin.sh
+
 # pam_loginuid needs CAP_AUDIT_CONTROL, which an unprivileged container lacks;
 # as `required` it rejects every login, so make it optional.
 RUN sed -i 's/^session\s\+required\s\+pam_loginuid.so/session    optional     pam_loginuid.so/' /etc/pam.d/cockpit
