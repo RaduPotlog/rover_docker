@@ -37,6 +37,16 @@ fi
 
 echo "Cockpit ROS 2 diagnostics on http port $ROVER_COCKPIT_PORT (user: $ROVER_COCKPIT_USER, namespace: ${ROVER_NAMESPACE:-<none>})"
 
+# Extra allowed WebSocket origins, space separated, for when the ProtocolHeader in
+# cockpit.conf is not enough (a proxy without X-Forwarded-Proto, a port-forwarded WAN IP).
+# This list REPLACES Cockpit's same-host default, so it must also name every LAN origin
+# still used, e.g. "https://<uuid>.balena-devices.com http://192.168.88.10".
+if [ -n "${ROVER_COCKPIT_ORIGINS:-}" ]; then
+  sed -i '/^Origins *=/d' /etc/cockpit/cockpit.conf
+  sed -i "/^\[WebService\]/a Origins=${ROVER_COCKPIT_ORIGINS}" /etc/cockpit/cockpit.conf
+  echo "Cockpit allowed origins: ${ROVER_COCKPIT_ORIGINS}"
+fi
+
 # Verbose cockpit-ws / session / bridge logging in the container log, to see why a
 # session gets closed. Off by default: it logs every message.
 if [ "${ROVER_COCKPIT_DEBUG:-false}" = true ]; then

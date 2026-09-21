@@ -109,6 +109,13 @@ without `ROVER_COCKPIT_PASSWORD` it must exit with an error. On the rover,
 verify hardware bringup, the LAN Zenoh connection, and bridge ports after
 deployment. A successful image build alone does not validate hardware.
 
+Through the balenaCloud Public Device URL, balena's proxy terminates TLS, so
+Cockpit takes the https scheme from its `X-Forwarded-Proto` header
+(`ProtocolHeader` in `cockpit.conf`). If login still ends in "Connection
+failed" (`bad Origin` in the `rover-cockpit` log), set `ROVER_COCKPIT_ORIGINS`
+to the space-separated list of allowed origins; it replaces Cockpit's default,
+so include the LAN origins you use too.
+
 See the [Docker multi-platform build documentation](https://docs.docker.com/build/building/multi-platform/)
 for builder setup.
 
