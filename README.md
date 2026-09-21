@@ -114,7 +114,9 @@ Cockpit takes the https scheme from its `X-Forwarded-Proto` header
 (`ProtocolHeader` in `cockpit.conf`). If login still ends in "Connection
 failed" (`bad Origin` in the `rover-cockpit` log), set `ROVER_COCKPIT_ORIGINS`
 to the space-separated list of allowed origins; it replaces Cockpit's default,
-so include the LAN origins you use too.
+so include the LAN origins you use too. The Cockpit container also runs its own
+private system D-Bus (not the host's): without one, `cockpit-bridge` crashes on
+a page reload and the session ends in "Connection failed".
 
 See the [Docker multi-platform build documentation](https://docs.docker.com/build/building/multi-platform/)
 for builder setup.

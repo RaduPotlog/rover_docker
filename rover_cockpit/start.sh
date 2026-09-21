@@ -37,6 +37,15 @@ fi
 
 echo "Cockpit ROS 2 diagnostics on http port $ROVER_COCKPIT_PORT (user: $ROVER_COCKPIT_USER, namespace: ${ROVER_NAMESPACE:-<none>})"
 
+# The Cockpit shell opens D-Bus channels on the system bus (e.g. hostname1). With no bus
+# in the container, cockpit-bridge crashes on a page reload ("sd_bus_attach_event:
+# Invalid argument", then "channel is already open") and the login ends in "Connection
+# failed". Run a private system bus: missing services then just report not-found, and the
+# page gets no access to the host's D-Bus.
+mkdir -p /run/dbus
+rm -f /run/dbus/pid
+dbus-daemon --system --fork
+
 # Extra allowed WebSocket origins, space separated, for when the ProtocolHeader in
 # cockpit.conf is not enough (a proxy without X-Forwarded-Proto, a port-forwarded WAN IP).
 # This list REPLACES Cockpit's same-host default, so it must also name every LAN origin
