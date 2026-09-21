@@ -325,6 +325,15 @@ in. It is built for one rover and indoor navigation.
 - **Other controls:** e-stop buttons call the `hardware_interface/sw_*` Trigger services.
 - **Top bar:** safety (e-stop, latch, `motion_lock`), diagnostics, battery and
   link latency (a round trip through `/rosapi/get_time`).
+- **Map view:** shows the occupancy map, the lidar scan, the Nav 2 plan and the rover. Tools:
+  **Set pose** (AMCL `initialpose`) and **Go to** (`rover_mission_manager` `set_mission`), plus
+  **Stop**. These need `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`.
+- **Places and Facility** (indoor mode only, `ROVER_LOCALIZATION_SOURCE=indoor`):
+  1. Record a map with **Start mapping**.
+  2. **Save map as…** a name.
+  3. **Load** it (AMCL).
+  4. Save named places on it, then send the rover to one place or run a workflow through
+     several.
 
 ### Drive interface variables
 
@@ -371,7 +380,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | `ROVER_GPS_PUBLISH_MAP_TF` | `false` | platform, orchestrator | Only matters with `ROVER_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
 | `ROVER_LAN_IP` | `192.168.1.201` | platform | Rover LAN address the Zenoh router binds. |
-| `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps`, `slam` or `amcl`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox) and `amcl` (nav2_amcl) both require `ROVER_USE_GPS=false` or `ROVER_GPS_PUBLISH_MAP_TF=false` — exactly one process may publish `map → odom`. `amcl` is the indoor mode and additionally needs `ROVER_USE_LIDAR=true` and a real `ROVER_NAV_MAP`. An unrecognized value is ignored with a warning. |
+| `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps`, `slam`, `amcl` or `indoor`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox), `amcl` (nav2_amcl) and `indoor` all require `ROVER_USE_GPS=false` or `ROVER_GPS_PUBLISH_MAP_TF=false` — exactly one process may publish `map → odom`. `amcl` localizes on a fixed `ROVER_NAV_MAP` and needs `ROVER_USE_LIDAR=true`. **`indoor`** is the mode for the [drive interface](#drive-interface): `rover_indoor_nav_manager` runs slam_toolbox while you record a map and map_server + AMCL on a saved one, switching at runtime; maps, places and the last pose live in the `rover-maps` volume (`/maps/<name>/`), and `ROVER_NAV_MAP` / `ROVER_AMCL_INITIAL_POSE_*` are ignored. An unrecognized value is ignored with a warning. |
 | `ROVER_NAV_MAP` | *(unset)* | orchestrator | Optional path to a map yaml inside the container; defaults to `rover_navigation`'s `empty_world.yaml`. **Required with `ROVER_LOCALIZATION_SOURCE=amcl`** — AMCL cannot localize against the empty default, so build a map with `=slam` first and point this at `/maps/map.yaml`. |
 | `ROVER_AMCL_INITIAL_POSE_X` / `_Y` / `_YAW` | `0.0` | orchestrator | Pose AMCL is seeded with at startup, in the map frame. The default is correct only when the map origin is where the rover parks, i.e. the slam run started there. Find it with `ros2 run tf2_ros tf2_echo rover/map rover/base_link`. |
 

@@ -14,7 +14,8 @@ version: '2.4'
 # ROVER_GPS_PUBLISH_MAP_TF     platform: global EKF publishes map -> odom (default false: SLAM/AMCL
 #                              own it); orchestrator: localization_source checks
 # ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
-# ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam | amcl, overrides ROVER_USE_GPS
+# ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam | amcl | indoor, overrides ROVER_USE_GPS;
+#                              indoor = drive-UI mapping + maps in /maps (rover_indoor_nav_manager)
 # ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world;
 #                              REQUIRED for localization_source=amcl (the default empty map
 #                              cannot localize) - build one with =slam first, see below
