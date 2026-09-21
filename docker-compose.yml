@@ -14,11 +14,15 @@ version: '2.4'
 # ROVER_GPS_PUBLISH_MAP_TF     platform: global EKF publishes map -> odom (default false: SLAM/AMCL
 #                              own it); orchestrator: localization_source checks
 # ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
-# ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam, overrides ROVER_USE_GPS
-# ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world
+# ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam | amcl, overrides ROVER_USE_GPS
+# ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world;
+#                              REQUIRED for localization_source=amcl (the default empty map
+#                              cannot localize) - build one with =slam first, see below
+# ROVER_AMCL_INITIAL_POSE_*    orchestrator: X/Y/YAW AMCL is seeded with at startup, in the map
+#                              frame; unset = 0,0,0, correct only if the map origin is the dock
 # ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
 #                              body_link; unset = URDF default
-# ROVER_COCKPIT_*              cockpit: http port, login and debug logging; no password = cockpit won't start
+# ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit won't start
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
 # platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
@@ -37,6 +41,14 @@ services:
       io.balena.features.supervisor-api: '1'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
+    # rover_crsf_teleop writes the measured RC stick calibration to
+    # /config/rover_crsf_teleop/rc_calibration.yaml when an operator applies one from the Cockpit
+    # RC page. A named volume, not a bind mount, for the same reason as rover-maps: a balenaOS
+    # device filesystem is read-only outside one. It survives container restarts and image
+    # updates, but not a device reprovision - copy it off with
+    # `scp root@<device>:/config/rover_crsf_teleop/rc_calibration.yaml .` (sshd is on port 22).
+    volumes:
+      - rover-config:/config
     environment:
       ROVER_NAMESPACE: 'rover'
       ROVER_START_ROS_PLATFORM: 'true'
@@ -48,6 +60,9 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -70,12 +85,20 @@ services:
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
     restart: always
     # Its sshd listens on 2222: port 22 belongs to rover-a1-platform in the shared host network.
     network_mode: host
+    # map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and
+    # localization_source=amcl reads it back through ROVER_NAV_MAP. A named volume, not a bind
+    # mount: a balenaOS device filesystem is read-only outside /data. The map survives container
+    # restarts and image updates, but not a device reprovision - copy it off with
+    # `scp -P 2222 root@<device>:/maps/map.* .`
+    volumes:
+      - rover-maps:/maps
     environment:
       ROVER_NAMESPACE: 'rover'
       ROVER_START_ROS_PLATFORM: 'true'
@@ -87,6 +110,9 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -109,6 +135,7 @@ services:
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -126,6 +153,9 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -148,6 +178,7 @@ services:
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
   rover-cockpit:
     build:
       context: ./rover_cockpit
@@ -167,6 +198,9 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
       ROVER_GPS_LOCALIZATION_X:
       ROVER_GPS_LOCALIZATION_Y:
       ROVER_GPS_LOCALIZATION_Z:
@@ -189,6 +223,7 @@ services:
       ROVER_COCKPIT_USER: 'rover'
       ROVER_COCKPIT_PASSWORD:
       ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
     healthcheck:
       # A script in the image reads ROVER_COCKPIT_PORT at run time. No `$` here: balena's
       # compose parser mangles `$$`, which made this check fail forever and restart cockpit.
@@ -197,3 +232,10 @@ services:
       timeout: 5s
       start_period: 10s
       retries: 3
+
+volumes:
+  # Persists the SLAM map across container restarts for localization_source=amcl.
+  rover-maps:
+  # Persists the measured RC stick calibration. Only rover-a1-platform needs it: the Cockpit page
+  # reaches the calibration through the node's rc/calibration services, never by reading the file.
+  rover-config:

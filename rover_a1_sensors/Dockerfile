@@ -7,9 +7,11 @@
 # rover_orchestrator. Joins the platform's Zenoh router over host networking, which is also
 # what lets the drivers receive the RUTX11 NMEA (UDP 10110) and the RS16 (UDP 6699/7788).
 #
-# Deliberately lean apart from an sshd on 222 (22 is rover-a1-platform's, 2222 is
-# rover-a1-orchestrator's - host networking gives all three one port space). No Claude tooling:
-# use the platform or orchestrator shell for that, both see the same ROS graph.
+# Deliberately lean apart from two things. An sshd on 222 (22 is rover-a1-platform's, 2222 is
+# rover-a1-orchestrator's - host networking gives all three one port space). And the Claude
+# Code / ros-mcp tooling, kept at parity with the other two ROS images so `claude` behaves the
+# same on any of the three shells; as in rover-a1-orchestrator it needs no rosbridge of its
+# own, because that shared namespace puts rover-a1-platform's on 127.0.0.1:9090.
 FROM ubuntu:26.04
 
 # Avoid interactive prompts during build
@@ -36,6 +38,42 @@ RUN echo 'root:root' | chpasswd \
 
 # Documentation only - host networking ignores EXPOSE.
 EXPOSE 222
+
+##################################### Claude Code CLI ####################################
+
+# Node.js (LTS) via NodeSource, then the Claude Code CLI - the same pair rover-a1-platform and
+# rover-a1-orchestrator install. Above the ROS and workspace layers for the reason the sshd
+# block gives: the git clone / rosdep / colcon build steps below are the expensive ones. The
+# cost of that placement is that bumping either tool invalidates those layers under it.
+#
+# The NodeSource setup script runs its own apt-get update, so this works even though the
+# layer above ends with `rm -rf /var/lib/apt/lists/*`.
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g @anthropic-ai/claude-code
+
+##################################### ros-mcp-server #####################################
+
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+# Baked into the image at build time, so the robot needs no PyPI fetch at runtime. fastmcp is
+# held below 4 deliberately: ros-mcp 3.1.0 asks only for `fastmcp>=2.11.3`, but fastmcp 4 moved
+# `fastmcp.tools.tool` to `fastmcp.tools.base`, so an unconstrained install resolves fastmcp 4
+# and ros-mcp dies on import with ModuleNotFoundError - which Claude Code reports only as a
+# CONNECTION_CLOSED server. Drop the constraint once ros-mcp ships fastmcp 4 support; ros-mcp
+# itself stays unpinned, so rebuilds still pick up new releases.
+RUN uv tool install ros-mcp --with "fastmcp<4"
+
+# Registered at user scope so it is available no matter which directory `claude` is started
+# from over SSH. ros-mcp reaches rosbridge at 127.0.0.1:9090, which runs in rover-a1-platform -
+# all three ROS services are network_mode: host and share one network namespace. This image
+# runs no rosbridge of its own and needs none.
+RUN claude mcp add ros-mcp --scope user -- ros-mcp --transport=stdio
+
+##########################################################################################
 
 RUN add-apt-repository universe
 
@@ -67,6 +105,9 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 # No ZENOH_ROUTER_CONFIG_URI: this container is a Zenoh session, not a router. The router
 # runs in rover-a1-platform and both share the host network namespace.
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
+# ENV PATH above reaches `docker exec`, but sshd builds a fresh environment for login shells,
+# so without this `ros-mcp` is off PATH over SSH and Claude fails to spawn the MCP server.
+RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 
 ##################################### Sensors workspace ##################################
 

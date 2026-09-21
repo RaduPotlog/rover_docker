@@ -35,9 +35,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # plugin as the only menu entry, login lands straight on ROS 2 diagnostics.
 # curl: healthcheck. iputils-ping: the ROS 2 Networking tab pings the rover's
 # devices through cockpit.spawn (needs CAP_NET_RAW, see docker-compose.yml).
+# dbus: a private system bus for the Cockpit shell (see start.sh); without one
+# cockpit-bridge crashes when the page is reloaded.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
-       cockpit-ws cockpit-bridge cockpit-system curl ca-certificates iputils-ping \
+       cockpit-ws cockpit-bridge cockpit-system curl ca-certificates iputils-ping dbus \
     && rm -rf /var/lib/apt/lists/* \
        /usr/share/cockpit/systemd /usr/share/cockpit/users /usr/share/cockpit/metrics
 

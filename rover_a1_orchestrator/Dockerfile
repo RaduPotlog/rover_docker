@@ -67,8 +67,13 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:${PATH}"
 
-# Baked into the image at build time, so the robot needs no PyPI fetch at runtime.
-RUN uv tool install ros-mcp
+# Baked into the image at build time, so the robot needs no PyPI fetch at runtime. fastmcp is
+# held below 4 deliberately: ros-mcp 3.1.0 asks only for `fastmcp>=2.11.3`, but fastmcp 4 moved
+# `fastmcp.tools.tool` to `fastmcp.tools.base`, so an unconstrained install resolves fastmcp 4
+# and ros-mcp dies on import with ModuleNotFoundError - which Claude Code reports only as a
+# CONNECTION_CLOSED server. Drop the constraint once ros-mcp ships fastmcp 4 support; ros-mcp
+# itself stays unpinned, so rebuilds still pick up new releases.
+RUN uv tool install ros-mcp --with "fastmcp<4"
 
 # Registered at user scope so it is available no matter which directory `claude` is started
 # from over SSH. ros-mcp reaches rosbridge at 127.0.0.1:9090, which runs in
@@ -115,6 +120,12 @@ RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
+# map_autosaver writes <map_directory>.yaml/.pgm here while slam_toolbox is running, and
+# localization_source:=amcl reads the result back via ROVER_NAV_MAP. nav2's map_saver does
+# not create parent directories, so the directory has to exist in the image. Mount a named
+# volume over it (docker-compose.yml) or the map dies with the container.
+RUN mkdir -p /maps
+
 # Both repositories track their master branch by default, so every `--nocache` build picks
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
@@ -131,30 +142,9 @@ RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orc
 RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
 
 # autonomy_deps.repos brings pointcloud_crop_box - the self-filter for rover_navigation's
-# `pointcloud` observation path, source-only so it cannot come from rosdep. It also pins
-# navigation2 (via the RaduPotlog/rover_navigation fork), for
-# nav2_smac_planner - planner_server's GridBased plugin, and the one nav2_* package with no
-# arm64 binary on lyrical/resolute.
-# vcstool cannot express a sparse checkout, so prune the import down to that single package.
-#
-# Mandatory, not an optimization, for two independent reasons:
-#   - rosdep resolves the `nav2_smac_planner` key to ros-${ROS_DISTRO}-nav2-smac-planner,
-#     which does not exist on arm64. The -i below only skips it because the package is
-#     present in src/, so without this checkout the rosdep layer fails outright.
-#   - `--packages-up-to rover_autonomy` follows rover_navigation's exec_depends. Unpruned,
-#     colcon finds 46 packages in this import instead of 1, so it rebuilds the whole Nav 2
-#     stack from source on top of the debs, and rosdep resolves those packages' deps rather
-#     than installing the debs at all - measured: ros-gz-bridge, nav2-minimal-tb3-sim,
-#     nav2-minimal-tb4-sim and qt6-scxml-dev, in an image with no GUI and no simulator.
-#
-# src/rover_navigation, not src/third_party/rover_navigation: vcs import derives the directory
-# from the .repos key. That directory is the Nav 2 fork, not the rover's own rover_navigation
-# package, which lives in src/rover_orchestrator/rover_navigation. Folded into the same RUN as
-# the import because Docker layers are additive - pruning in a later layer would leave the full
-# tree committed in this one and reclaim nothing.
-RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos \
-    && git -C src/rover_navigation sparse-checkout init --cone \
-    && git -C src/rover_navigation sparse-checkout set nav2_smac_planner
+# `pointcloud` observation path, source-only so it cannot come from rosdep. Every nav2_*
+# package, nav2_smac_planner included, is an arm64 deb and comes from the rosdep pass below.
+RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
@@ -163,9 +153,10 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # GPS drivers are not in rover_ros any more (they are the rover_sensors payload, built by
 # rover-a1-sensors). src/rover_pointcloud_crop_box must stay in src/ so -i ignores its
 # `pointcloud_crop_box` key.
-# Pulls the Nav 2 stack, slam_toolbox, spatio_temporal_voxel_layer and behaviortree_cpp.
-# nav2_smac_planner is the one exception: -i skips it because the pruned checkout above
-# put it in src/, and colcon builds it from source instead.
+# Pulls the Nav 2 stack (nav2_smac_planner and nav2_amcl included), slam_toolbox,
+# spatio_temporal_voxel_layer and behaviortree_cpp. nav2_amcl arrives because
+# rover_navigation declares it - localization_source:=amcl launches it - so it needs no
+# entry here, but it does need an image rebuild to appear.
 #
 # apt-get update belongs in this same RUN: the ros-base layer above ends with
 # `rm -rf /var/lib/apt/lists/*`, and rosdep does not refresh the index itself - it shells out

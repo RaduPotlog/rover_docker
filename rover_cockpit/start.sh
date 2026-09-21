@@ -37,6 +37,25 @@ fi
 
 echo "Cockpit ROS 2 diagnostics on http port $ROVER_COCKPIT_PORT (user: $ROVER_COCKPIT_USER, namespace: ${ROVER_NAMESPACE:-<none>})"
 
+# The Cockpit shell opens D-Bus channels on the system bus (e.g. hostname1). With no bus
+# in the container, cockpit-bridge crashes on a page reload ("sd_bus_attach_event:
+# Invalid argument", then "channel is already open") and the login ends in "Connection
+# failed". Run a private system bus: missing services then just report not-found, and the
+# page gets no access to the host's D-Bus.
+mkdir -p /run/dbus
+rm -f /run/dbus/pid
+dbus-daemon --system --fork
+
+# Extra allowed WebSocket origins, space separated, for when the ProtocolHeader in
+# cockpit.conf is not enough (a proxy without X-Forwarded-Proto, a port-forwarded WAN IP).
+# This list REPLACES Cockpit's same-host default, so it must also name every LAN origin
+# still used, e.g. "https://<uuid>.balena-devices.com http://192.168.88.10".
+if [ -n "${ROVER_COCKPIT_ORIGINS:-}" ]; then
+  sed -i '/^Origins *=/d' /etc/cockpit/cockpit.conf
+  sed -i "/^\[WebService\]/a Origins=${ROVER_COCKPIT_ORIGINS}" /etc/cockpit/cockpit.conf
+  echo "Cockpit allowed origins: ${ROVER_COCKPIT_ORIGINS}"
+fi
+
 # Verbose cockpit-ws / session / bridge logging in the container log, to see why a
 # session gets closed. Off by default: it logs every message.
 if [ "${ROVER_COCKPIT_DEBUG:-false}" = true ]; then

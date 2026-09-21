@@ -48,6 +48,11 @@ trap 'terminate_children; exit 0' TERM INT
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
 
+# rover_crsf_teleop saves the measured RC stick calibration here (the rover-config named volume,
+# see docker-compose.yml). Created up front so the first `apply` does not have to, and so an
+# operator can drop a calibration in by hand before the node ever starts.
+mkdir -p /config/rover_crsf_teleop
+
 # Source ROS2 + workspace
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /root/ros2_ws/rover_a1/install/setup.bash
