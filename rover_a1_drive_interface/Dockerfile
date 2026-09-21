@@ -30,15 +30,32 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y apache2-utils curl \
     && rm -rf /var/lib/apt/lists/*
 
+##################################### SSH ################################################
+
+# Same arrangement as rover-a1-orchestrator / rover-a1-sensors: root password login through
+# an sshd_config.d drop-in, only the port differs - 2223, because host networking shares one
+# port space and 22 / 2222 / 222 belong to the platform, orchestrator and sensors sshds.
+# Debian's stock sshd_config starts with `Include /etc/ssh/sshd_config.d/*.conf`, and the
+# package's postinst generates the host keys. See README.md "Drive interface SSH".
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y openssh-server \
+    && mkdir -p /run/sshd \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN echo 'root:root' | chpasswd \
+    && printf 'Port 2223\nPermitRootLogin yes\nUsePAM no\n' \
+       > /etc/ssh/sshd_config.d/rover_drive_interface.conf
+
 COPY --from=build /src/dist /usr/share/nginx/drive
 COPY nginx.conf.template /etc/nginx/drive.conf.template
 COPY start.sh /usr/local/bin/start.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/healthcheck.sh
 
-EXPOSE 5000
+# Documentation only - host networking ignores EXPOSE.
+EXPOSE 5000 2223
 
 # Our own entrypoint instead of the image's template/envsubst machinery: it also writes
-# the login and config.json, and refuses to start without a password.
+# the login and config.json, supervises sshd + nginx, and refuses to serve without a password.
 ENTRYPOINT []
 CMD ["/usr/local/bin/start.sh"]

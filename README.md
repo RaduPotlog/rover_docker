@@ -14,7 +14,7 @@ service's build context in `docker-compose.yml`:
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 222 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
-| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). See [Drive interface](#drive-interface) |
+| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 2223. See [Drive interface](#drive-interface) |
 
 ```
 rover_docker/
@@ -184,6 +184,7 @@ All containers use host networking, so these bind directly to the device:
 | 22     | sshd (`rover-a1-platform`)           |
 | 2222   | sshd (`rover-a1-orchestrator`)       |
 | 222    | sshd (`rover-a1-sensors`)            |
+| 2223   | sshd (`rover-a1-drive-interface`)    |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
@@ -335,14 +336,32 @@ in. It is built for one rover and indoor navigation.
   4. Save named places on it, then send the rover to one place or run a workflow through
      several.
 
+### Drive interface SSH
+
+`rover-a1-drive-interface` runs its own sshd on **2223**. It is set up like the other containers'
+(same `root:root` credentials, `/etc/ssh/sshd_config.d/` drop-in); only the port differs.
+
+```bash
+ssh -p 2223 root@<rover-lan-ip>     # drive interface: nginx, /tmp/nginx.conf, /tmp/drive-config.json
+```
+
+`start.sh` starts sshd before its gates and supervises it together with nginx: if either
+exits, the container restarts.
+
+When `ROVER_DRIVE_ENABLE=false`, or `ROVER_DRIVE_PASSWORD` is unset, the container **idles**
+with only sshd running instead of exiting. It leaves `/tmp/drive-interface-idle`, which the
+healthcheck accepts, so balenaEngine does not restart the idle container as unhealthy. The
+caveats of the other shells apply here too: an image-default password, and host keys shared
+per build. This image has no ROS, `claude` or `ros-mcp`.
+
 ### Drive interface variables
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `ROVER_DRIVE_ENABLE` | `true` | `false` = the container idles. |
+| `ROVER_DRIVE_ENABLE` | `true` | `false` = the container idles (sshd on 2223 only). |
 | `ROVER_DRIVE_PORT` | `5000` | Port nginx binds (plain http). |
 | `ROVER_DRIVE_USER` | `rover` | Login user. |
-| `ROVER_DRIVE_PASSWORD` | *(unset)* | Required. The container refuses to start without it. |
+| `ROVER_DRIVE_PASSWORD` | *(unset)* | Required. Without it nginx is not started and the container idles (sshd only), logging an error. |
 | `ROVER_DRIVE_MAX_LINEAR` / `_ANGULAR` | `1.0` / `1.0` | 100 % speed preset in m/s / rad/s; the presets are 20/50/80/100 % of it. The drive controller clamps at 1.2 m/s, 1.0 rad/s. |
 
 Limitations:

@@ -25,7 +25,7 @@ version: '2.4'
 #                              body_link; unset = URDF default
 # ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit won't start
 # ROVER_DRIVE_*                drive-interface: on/off, http port, login, teleop speed limits (m/s, rad/s);
-#                              no password = the drive interface won't start
+#                              no password = nginx is not started (the container idles, sshd on 2223 only)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
 # platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
