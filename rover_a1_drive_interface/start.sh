@@ -19,12 +19,12 @@ trap 'terminate_children; exit 0' TERM INT
 rm -f /tmp/drive-interface-idle
 
 # **SSHD background (keep alive)** - started before the gates below, so the container is
-# reachable even while the drive interface idles. Port 2223 (set in the image's sshd_config
-# drop-in): 22 is rover-a1-platform's, 2222 rover-a1-orchestrator's, 222 rover-a1-sensors'.
+# reachable even while the drive interface idles. Port 25 (set in the image's sshd_config
+# drop-in): platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
-echo "sshd started on port 2223 (PID: $SSHD_PID)"
+echo "sshd started on port 25 (PID: $SSHD_PID)"
 
 norm_bool() {
   case "${1:-$2}" in
@@ -37,7 +37,7 @@ norm_bool() {
 # and take the SSH session with it. Changing a balenaCloud variable restarts the container,
 # which re-reads them here.
 idle() {
-  echo "$1; idling (sshd on 2223 stays up)"
+  echo "$1; idling (sshd on 25 stays up)"
   touch /tmp/drive-interface-idle  # see healthcheck.sh
   # Not `exec sleep infinity`: waiting on sshd idles just as well and keeps signals forwarded.
   wait "$SSHD_PID" || true

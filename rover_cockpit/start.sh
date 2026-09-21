@@ -1,4 +1,42 @@
 #!/bin/bash -e
+# Entrypoint of rover-cockpit: start sshd, set up the Cockpit login and its private D-Bus, then
+# run cockpit-ws - supervising sshd and cockpit-ws together, like the other rover containers.
+
+# All long-running processes we supervise. Populated as each is started.
+CHILD_PIDS=()
+
+terminate_children() {
+  if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
+    kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
+    wait "${CHILD_PIDS[@]}" 2>/dev/null || true
+  fi
+}
+
+# Forward container stop/kill signals to every supervised process instead
+# of only whichever one happens to be PID 1.
+trap 'terminate_children; exit 0' TERM INT
+
+rm -f /tmp/rover-cockpit-idle
+
+# **SSHD background (keep alive)** - started before the checks below, so the container is
+# reachable even when Cockpit cannot start. Port 26 (set in the image's sshd_config drop-in):
+# platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
+mkdir -p /run/sshd  # privilege-separation dir; /run can start empty, like /run/dbus below
+/usr/sbin/sshd -D &
+SSHD_PID=$!
+CHILD_PIDS+=("$SSHD_PID")
+echo "sshd started on port 26 (PID: $SSHD_PID)"
+
+# Idle (sshd only) rather than exit on a configuration error: `restart: always` would otherwise
+# crash-loop the service and take the SSH session with it. Changing a balenaCloud variable
+# restarts the container, which re-reads it here.
+idle() {
+  echo "$1; idling (sshd on 26 stays up)"
+  touch /tmp/rover-cockpit-idle  # see healthcheck.sh
+  wait "$SSHD_PID" || true
+  terminate_children
+  exit 0
+}
 
 # Cockpit login account for the ROS 2 diagnostics page. The password has no
 # default on purpose: set ROVER_COCKPIT_PASSWORD as a balenaCloud service variable.
@@ -6,14 +44,14 @@ ROVER_COCKPIT_USER=${ROVER_COCKPIT_USER:-rover}
 ROVER_COCKPIT_PORT=${ROVER_COCKPIT_PORT:-80}
 
 if [ -z "${ROVER_COCKPIT_PASSWORD:-}" ]; then
-  echo "ERROR: ROVER_COCKPIT_PASSWORD is not set. Set it as a balenaCloud service variable for rover-cockpit; refusing to start without a login password."
-  exit 1
+  echo "ERROR: ROVER_COCKPIT_PASSWORD is not set. Set it as a balenaCloud service variable for rover-cockpit; refusing to start without a login password." >&2
+  idle "Cockpit not started"
 fi
 
 # root is in /etc/cockpit/disallowed-users, so a normal account is required.
 if [ "$ROVER_COCKPIT_USER" = root ]; then
-  echo "ERROR: ROVER_COCKPIT_USER must not be root (Cockpit refuses root logins)."
-  exit 1
+  echo "ERROR: ROVER_COCKPIT_USER must not be root (Cockpit refuses root logins)." >&2
+  idle "Cockpit not started"
 fi
 
 if ! id "$ROVER_COCKPIT_USER" >/dev/null 2>&1; then
@@ -64,7 +102,25 @@ if [ "${ROVER_COCKPIT_DEBUG:-false}" = true ]; then
   export COCKPIT_DEBUG=all
 fi
 
-# exec: cockpit-ws becomes PID 1 and receives the container's stop signals.
 # Plain http (see cockpit.conf); every interface, like foxglove_bridge on 8765
 # that the page connects to.
-exec /usr/lib/cockpit/cockpit-ws --no-tls --port "$ROVER_COCKPIT_PORT"
+/usr/lib/cockpit/cockpit-ws --no-tls --port "$ROVER_COCKPIT_PORT" &
+COCKPIT_PID=$!
+CHILD_PIDS+=("$COCKPIT_PID")
+
+# **Supervise** - block until the first supervised process exits, then tear down the other and
+# exit so `restart: always` brings the whole container back. `|| EXIT_CODE=$?` because this
+# script runs under `bash -e`, which would otherwise skip the teardown on a non-zero exit.
+EXIT_CODE=0
+wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
+
+for entry in "sshd:$SSHD_PID" "cockpit-ws:$COCKPIT_PID"; do
+  name=${entry%%:*}
+  pid=${entry##*:}
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+  fi
+done
+
+terminate_children
+exit "$EXIT_CODE"

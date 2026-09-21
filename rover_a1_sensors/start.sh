@@ -16,12 +16,13 @@ terminate_children() {
 trap 'terminate_children; exit 0' TERM INT
 
 # **SSHD background (keep alive)** - started before the enable/disable gate below, so the
-# container is reachable even while the payload idles. Port 222 (set in the image's
-# sshd_config drop-in): 22 is rover-a1-platform's, 2222 rover-a1-orchestrator's.
+# container is reachable even while the payload idles. Port 23 (set in the image's
+# sshd_config drop-in): one port per container on the shared host network - platform 22,
+# sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
-echo "sshd started on port 222 (PID: $SSHD_PID)"
+echo "sshd started on port 23 (PID: $SSHD_PID)"
 
 # Normalize a balenaCloud boolean the same way the other rover containers do: unset or empty
 # falls back to $2, and anything that is not true/1/yes/on (any case) is false.
@@ -49,7 +50,7 @@ fi
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them here.
 if [ -n "$DISABLED_REASON" ]; then
-  echo "Sensor payload disabled: ${DISABLED_REASON}; idling (sshd on 222 stays up)"
+  echo "Sensor payload disabled: ${DISABLED_REASON}; idling (sshd on 23 stays up)"
   # Waiting on sshd idles just as well as `sleep infinity` and keeps signals forwarded.
   wait "$SSHD_PID" || true
   terminate_children

@@ -43,6 +43,18 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
        /usr/share/cockpit/systemd /usr/share/cockpit/users /usr/share/cockpit/metrics
 
+# A root maintenance shell on port 26, the same arrangement as the other containers
+# (root:root, sshd_config.d drop-in, UsePAM no); host networking gives every container one port
+# space: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26. Separate from
+# Cockpit's own logins, which stay the ROVER_COCKPIT_USER account on port 80 (root is refused).
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y openssh-server \
+    && mkdir -p /run/sshd \
+    && rm -rf /var/lib/apt/lists/*
+RUN echo 'root:root' | chpasswd \
+    && printf 'Port 26\nPermitRootLogin yes\nUsePAM no\n' \
+       > /etc/ssh/sshd_config.d/rover_cockpit.conf
+
 # pam_loginuid needs CAP_AUDIT_CONTROL, which an unprivileged container lacks;
 # as `required` it rejects every login, so make it optional.
 RUN sed -i 's/^session\s\+required\s\+pam_loginuid.so/session    optional     pam_loginuid.so/' /etc/pam.d/cockpit
@@ -60,6 +72,7 @@ COPY start.sh /usr/local/bin/start.sh
 COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/healthcheck.sh
 
-EXPOSE 80
+# Documentation only - host networking ignores EXPOSE.
+EXPOSE 80 26
 
 CMD ["/usr/local/bin/start.sh"]

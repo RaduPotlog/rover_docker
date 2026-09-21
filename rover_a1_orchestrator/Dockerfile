@@ -4,7 +4,7 @@
 # localization, safety) and runs the Zenoh router; this one owns navigation only and joins
 # that router over host networking. Everything hardware-specific - the Modbus stack,
 # rover_cppuprofile, libpcap, dbus - is deliberately absent here. Two things are exceptions.
-# An sshd, which listens on 2222 rather than 22: host networking puts this container in
+# An sshd, which listens on 24 rather than 22: host networking puts this container in
 # rover-a1-platform's network namespace, where that image's sshd already owns 22. And the
 # Claude Code / ros-mcp tooling, kept at parity with rover-a1-platform so `claude` behaves the
 # same on either shell - it needs no rosbridge of its own, because that same shared namespace
@@ -26,8 +26,9 @@ RUN apt-get update && apt-get install -y \
 # Installed above the workspace layers on purpose: the git clone / rosdep / colcon build
 # steps below are the expensive ones, so keeping sshd out of that churn preserves the cache.
 #
-# Port 2222, not 22: every service in docker-compose.yml is network_mode: host, so this
-# container shares one port space with rover-a1-platform, whose sshd already binds 22.
+# Port 24, not 22: every service in docker-compose.yml is network_mode: host, so they share
+# one port space and each sshd gets its own port - platform 22, sensors 23, orchestrator 24,
+# drive-interface 25, cockpit 26.
 RUN apt-get update && apt-get install -y openssh-server \
     && mkdir -p /var/run/sshd \
     && rm -rf /var/lib/apt/lists/*
@@ -40,12 +41,12 @@ RUN apt-get update && apt-get install -y openssh-server \
 # `Include /etc/ssh/sshd_config.d/*.conf`, so this wins without depending on the exact
 # commented-out text surviving an Ubuntu package update.
 RUN echo 'root:root' | chpasswd \
-    && printf 'Port 2222\nPermitRootLogin yes\nUsePAM no\n' \
+    && printf 'Port 24\nPermitRootLogin yes\nUsePAM no\n' \
        > /etc/ssh/sshd_config.d/rover_orchestrator.conf
 
 # Documentation only - host networking ignores EXPOSE. Kept for parity with
 # rover-a1-platform's `EXPOSE 22`.
-EXPOSE 2222
+EXPOSE 24
 
 ##################################### Claude Code CLI ####################################
 

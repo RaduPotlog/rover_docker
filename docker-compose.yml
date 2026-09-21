@@ -23,9 +23,9 @@ version: '2.4'
 #                              frame; unset = 0,0,0, correct only if the map origin is the dock
 # ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
 #                              body_link; unset = URDF default
-# ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit won't start
+# ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit-ws is not started (sshd on 26 stays up)
 # ROVER_DRIVE_*                drive-interface: on/off, http port, login, teleop speed limits (m/s, rad/s);
-#                              no password = nginx is not started (the container idles, sshd on 2223 only)
+#                              no password = nginx is not started (the container idles, sshd on 25 only)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
 # platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
@@ -99,13 +99,14 @@ services:
     build:
       context: ./rover_a1_orchestrator
     restart: always
-    # Its sshd listens on 2222: port 22 belongs to rover-a1-platform in the shared host network.
+    # Its sshd listens on 24 (one SSH port per container in the shared host network: platform 22,
+    # sensors 23, orchestrator 24, drive-interface 25, cockpit 26).
     network_mode: host
     # map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and
     # localization_source=amcl reads it back through ROVER_NAV_MAP. A named volume, not a bind
     # mount: a balenaOS device filesystem is read-only outside /data. The map survives container
     # restarts and image updates, but not a device reprovision - copy it off with
-    # `scp -P 2222 root@<device>:/maps/map.* .`
+    # `scp -P 24 root@<device>:/maps/map.* .`
     volumes:
       - rover-maps:/maps
     environment:
@@ -155,7 +156,7 @@ services:
     build:
       context: ./rover_a1_sensors
     restart: always
-    # Its sshd listens on 222: 22 is rover-a1-platform's, 2222 rover-a1-orchestrator's.
+    # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
     network_mode: host
     environment:
       ROVER_NAMESPACE: 'rover'

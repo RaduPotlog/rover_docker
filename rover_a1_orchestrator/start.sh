@@ -19,12 +19,13 @@ trap 'terminate_children; exit 0' TERM INT
 # shell is most useful exactly when the orchestrator is idling and there is no Nav 2 to
 # inspect. Credentials are the image's (root password), as in rover-a1-platform.
 #
-# Port 2222 (set in the image's sshd_config drop-in), not 22: host networking shares one port
-# space with rover-a1-platform, whose sshd owns 22.
+# Port 24 (set in the image's sshd_config drop-in), not 22: host networking shares one port
+# space, so each container's sshd has its own - platform 22, sensors 23, orchestrator 24,
+# drive-interface 25, cockpit 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
-echo "sshd started on port 2222 (PID: $SSHD_PID)"
+echo "sshd started on port 24 (PID: $SSHD_PID)"
 
 # Normalize a balenaCloud boolean the same way rover-a1-platform's start.sh does: unset or
 # empty falls back to $2, and anything that is not true/1/yes/on (any case) is false.
@@ -60,7 +61,7 @@ fi
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them here.
 if [ "$START_ORCHESTRATOR" != true ]; then
-  echo "Orchestrator stack disabled: ${DISABLED_REASON}; idling (sshd on 2222 stays up)"
+  echo "Orchestrator stack disabled: ${DISABLED_REASON}; idling (sshd on 24 stays up)"
   # Not `exec sleep infinity` here: exec would replace this shell, dropping the TERM trap and
   # orphaning sshd. Waiting on sshd idles just as well and keeps signals forwarded.
   wait "$SSHD_PID" || true

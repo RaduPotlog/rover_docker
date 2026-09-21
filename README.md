@@ -11,10 +11,10 @@ service's build context in `docker-compose.yml`:
 | Service            | Folder              | Contents                                                                   |
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
-| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 2222 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
-| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 222 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
-| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices) |
-| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 2223. See [Drive interface](#drive-interface) |
+| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 24 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
+| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
+| `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices), plus an sshd on port 26 |
+| `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25. See [Drive interface](#drive-interface) |
 
 ```
 rover_docker/
@@ -182,9 +182,10 @@ All containers use host networking, so these bind directly to the device:
 | Port   | Service                        |
 |--------|--------------------------------|
 | 22     | sshd (`rover-a1-platform`)           |
-| 2222   | sshd (`rover-a1-orchestrator`)       |
-| 222    | sshd (`rover-a1-sensors`)            |
-| 2223   | sshd (`rover-a1-drive-interface`)    |
+| 23     | sshd (`rover-a1-sensors`)            |
+| 24     | sshd (`rover-a1-orchestrator`)       |
+| 25     | sshd (`rover-a1-drive-interface`)    |
+| 26     | sshd (`rover-cockpit`)               |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 7447   | Zenoh router (loopback + rover LAN only, see below) |
@@ -194,24 +195,27 @@ All containers use host networking, so these bind directly to the device:
 | 6699/udp, 7788/udp | RoboSense RS16 MSOP / DIFOP → lidar driver (`rover-a1-sensors`) |
 | 48484  | balena supervisor              |
 
-`rover-a1-orchestrator` opens one port of its own, 2222, for its sshd — 22 belongs to
-`rover-a1-platform`, and host networking gives the two containers a single port space. It
-runs **no Zenoh router** of its own, joining the existing one on 7447 as a session (see
+Host networking gives every container a single port space, so each sshd has its own port —
+platform **22**, sensors **23**, orchestrator **24**, drive-interface **25**, cockpit **26**.
+`rover-a1-orchestrator` runs **no Zenoh router** of its own, joining the existing one on 7447 as a session (see
 [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
 
 That sshd takes the same credentials as `rover-a1-platform`'s — root password login, baked
-into the image. Only the port differs: `ssh -p 2222 root@<rover-lan-ip>`. See
+into the image. Only the port differs: `ssh -p 24 root@<rover-lan-ip>`. See
 [Orchestrator SSH](#orchestrator-ssh).
 
 ## Orchestrator SSH
 
-`rover-a1-orchestrator` runs its own sshd on **2222**, configured in the image
+`rover-a1-orchestrator` runs its own sshd on **24**, configured in the image
 (`rover_a1_orchestrator/Dockerfile`) exactly as `rover-a1-platform`'s is on 22 — `root:root`,
 `PermitRootLogin yes`, `UsePAM no` — through a `/etc/ssh/sshd_config.d/` drop-in.
 
 ```bash
-ssh -p 2222 root@<rover-lan-ip>     # orchestrator: Nav 2 + mission manager
-ssh root@<rover-lan-ip>             # platform: drivers, Zenoh router, bringup
+ssh root@<rover-lan-ip>             # 22  platform: drivers, Zenoh router, bringup
+ssh -p 23 root@<rover-lan-ip>       # 23  sensors: GNSS + lidar drivers
+ssh -p 24 root@<rover-lan-ip>       # 24  orchestrator: Nav 2 + mission manager
+ssh -p 25 root@<rover-lan-ip>       # 25  drive interface: nginx
+ssh -p 26 root@<rover-lan-ip>       # 26  cockpit
 ```
 
 `start.sh` starts sshd ahead of the enable/disable gate, so the container is reachable even
@@ -227,16 +231,19 @@ Two caveats, both inherited from `rover-a1-platform` and neither specific to thi
   from one image build shares them. Regenerating per device (`rm -f /etc/ssh/ssh_host_*` in
   the Dockerfile plus `ssh-keygen -A` in `start.sh`) is the fix if that matters.
 
-Neither is a regression — it is the arrangement port 22 has always had — but 2222 doubles the
-surface, so it is worth stating.
+Neither is a regression — it is the arrangement port 22 has always had — but every extra
+shell (23–26) widens the surface, so it is worth stating.
 
-### Claude Code on the 2222 and 222 shells
+After an image rebuild the host keys change, so `ssh` warns "host key changed" once per port;
+clear the old entry with `ssh-keygen -R '[<rover-lan-ip>]:<port>'` (plain `<rover-lan-ip>` for 22).
+
+### Claude Code on the orchestrator and sensors shells
 
 The orchestrator and sensors images carry the same Claude tooling as `rover-a1-platform` — the
 `@anthropic-ai/claude-code` CLI plus `ros-mcp`, registered at user scope at build time — so
-`claude` works identically on all three shells. Run it from the 2222 session when the thing you
-are debugging is Nav 2, the costmaps or the mission manager, and from the 222 session when it
-is the GNSS or lidar payload.
+`claude` works identically on all three shells. Run it from the port-24 session when the thing
+you are debugging is Nav 2, the costmaps or the mission manager, and from the port-23 session
+when it is the GNSS or lidar payload.
 
 - **One-time login.** `claude` prompts for authentication on first run. The credential is
   written to `/root/.claude.json` **inside the container**, so it does not survive a container
@@ -250,18 +257,33 @@ is the GNSS or lidar payload.
 
 ## Sensors SSH
 
-`rover-a1-sensors` runs its own sshd on **222**, set up like the orchestrator's (same
+`rover-a1-sensors` runs its own sshd on **23**, set up like the orchestrator's (same
 `root:root` credentials, `/etc/ssh/sshd_config.d/` drop-in); only the port differs.
 
 ```bash
-ssh -p 222 root@<rover-lan-ip>      # sensors: GNSS + lidar drivers
+ssh -p 23 root@<rover-lan-ip>       # sensors: GNSS + lidar drivers
 ```
 
 As in the orchestrator, `start.sh` starts sshd ahead of the `ROVER_START_SENSORS` gate, so the
 shell is up while the payload idles, and a dead sshd restarts the service. The caveats above
 (image-default password, host keys shared per build) apply here too, as does everything in
-[Claude Code on the 2222 and 222 shells](#claude-code-on-the-2222-and-222-shells): this image
+[Claude Code on the orchestrator and sensors shells](#claude-code-on-the-orchestrator-and-sensors-shells): this image
 carries the same `claude` and `ros-mcp` as the other two.
+
+## Cockpit SSH
+
+`rover-cockpit` runs its own sshd on **26** — the same `root:root` drop-in arrangement as the
+others. It is a root maintenance shell, separate from Cockpit's own web login
+(`ROVER_COCKPIT_USER` on port 80, which refuses root).
+
+```bash
+ssh -p 26 root@<rover-lan-ip>       # cockpit: cockpit-ws, /etc/cockpit, the private D-Bus
+```
+
+`start.sh` starts sshd first and supervises it together with `cockpit-ws`; if either exits the
+container restarts. Without `ROVER_COCKPIT_PASSWORD` (or with `ROVER_COCKPIT_USER=root`) the
+container now **idles** with only sshd running instead of exiting, and leaves
+`/tmp/rover-cockpit-idle`, which the healthcheck accepts, so the shell stays reachable to fix it.
 
 ## ROS 2 diagnostics (Cockpit)
 
@@ -283,7 +305,7 @@ opens directly. It replaces the former `rover-web-server` dashboard. It has thre
   Any logged-in Cockpit user can use them.
 
 - **Login:** set the balenaCloud service variable `ROVER_COCKPIT_PASSWORD` for
-  `rover-cockpit` (required — the container exits without it). The user name is
+  `rover-cockpit` (required — without it the container idles with only sshd on 26). The user name is
   `ROVER_COCKPIT_USER` (default `rover`; `root` is refused). Both are re-applied on
   every container start.
 - **Data path:** the page runs in the browser, but it does not connect to
@@ -338,11 +360,11 @@ in. It is built for one rover and indoor navigation.
 
 ### Drive interface SSH
 
-`rover-a1-drive-interface` runs its own sshd on **2223**. It is set up like the other containers'
+`rover-a1-drive-interface` runs its own sshd on **25**. It is set up like the other containers'
 (same `root:root` credentials, `/etc/ssh/sshd_config.d/` drop-in); only the port differs.
 
 ```bash
-ssh -p 2223 root@<rover-lan-ip>     # drive interface: nginx, /tmp/nginx.conf, /tmp/drive-config.json
+ssh -p 25 root@<rover-lan-ip>       # drive interface: nginx, /tmp/nginx.conf, /tmp/drive-config.json
 ```
 
 `start.sh` starts sshd before its gates and supervises it together with nginx: if either
@@ -358,7 +380,7 @@ per build. This image has no ROS, `claude` or `ros-mcp`.
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `ROVER_DRIVE_ENABLE` | `true` | `false` = the container idles (sshd on 2223 only). |
+| `ROVER_DRIVE_ENABLE` | `true` | `false` = the container idles (sshd on 25 only). |
 | `ROVER_DRIVE_PORT` | `5000` | Port nginx binds (plain http). |
 | `ROVER_DRIVE_USER` | `rover` | Login user. |
 | `ROVER_DRIVE_PASSWORD` | *(unset)* | Required. Without it nginx is not started and the container idles (sshd only), logging an error. |
@@ -424,7 +446,7 @@ warning in `/tmp/rover_bringup.log`.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_COCKPIT_USER` | `rover` | cockpit | Cockpit login user. `root` is refused. |
-| `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — `rover-cockpit` exits with an error without it. |
+| `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — without it `cockpit-ws` is not started and the container idles (sshd on 26 only), logging an error. |
 | `ROVER_COCKPIT_PORT` | `80` | cockpit | Port the Cockpit web console binds (plain http). |
 | `ROVER_COCKPIT_DEBUG` | `false` | cockpit | `true` = verbose cockpit-ws / session / bridge logging in the container log (`G_MESSAGES_DEBUG`, `COCKPIT_DEBUG`), to see why a session was closed. Very chatty; leave off normally. |
 
@@ -465,7 +487,7 @@ It starts that stack only when **both** hold:
 
 When idle the container does **not** exit — it sleeps, so `restart: always` cannot crash-loop
 it, and the balena logs carry a single line naming the reason. sshd starts ahead of that
-gate, so an idle container is still reachable on 2222 — which is when a shell tends to be
+gate, so an idle container is still reachable on 24 — which is when a shell tends to be
 most useful. Changing any of the variables restarts the container, which re-evaluates them.
 
 To run the stack on a companion controller, leave `ROVER_START_NAVIGATION=false` on the rover,

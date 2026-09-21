@@ -33,8 +33,8 @@ RUN apt-get update \
 ##################################### SSH ################################################
 
 # Same arrangement as rover-a1-orchestrator / rover-a1-sensors: root password login through
-# an sshd_config.d drop-in, only the port differs - 2223, because host networking shares one
-# port space and 22 / 2222 / 222 belong to the platform, orchestrator and sensors sshds.
+# an sshd_config.d drop-in, only the port differs - 25, because host networking shares one
+# port space: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
 # Debian's stock sshd_config starts with `Include /etc/ssh/sshd_config.d/*.conf`, and the
 # package's postinst generates the host keys. See README.md "Drive interface SSH".
 RUN apt-get update \
@@ -43,7 +43,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN echo 'root:root' | chpasswd \
-    && printf 'Port 2223\nPermitRootLogin yes\nUsePAM no\n' \
+    && printf 'Port 25\nPermitRootLogin yes\nUsePAM no\n' \
        > /etc/ssh/sshd_config.d/rover_drive_interface.conf
 
 COPY --from=build /src/dist /usr/share/nginx/drive
@@ -53,7 +53,7 @@ COPY healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/start.sh /usr/local/bin/healthcheck.sh
 
 # Documentation only - host networking ignores EXPOSE.
-EXPOSE 5000 2223
+EXPOSE 5000 25
 
 # Our own entrypoint instead of the image's template/envsubst machinery: it also writes
 # the login and config.json, supervises sshd + nginx, and refuses to serve without a password.

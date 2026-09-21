@@ -7,8 +7,8 @@
 # rover_orchestrator. Joins the platform's Zenoh router over host networking, which is also
 # what lets the drivers receive the RUTX11 NMEA (UDP 10110) and the RS16 (UDP 6699/7788).
 #
-# Deliberately lean apart from two things. An sshd on 222 (22 is rover-a1-platform's, 2222 is
-# rover-a1-orchestrator's - host networking gives all three one port space). And the Claude
+# Deliberately lean apart from two things. An sshd on 23 (22 is rover-a1-platform's, 24 is
+# rover-a1-orchestrator's - host networking gives every container one port space). And the Claude
 # Code / ros-mcp tooling, kept at parity with the other two ROS images so `claude` behaves the
 # same on any of the three shells; as in rover-a1-orchestrator it needs no rosbridge of its
 # own, because that shared namespace puts rover-a1-platform's on 127.0.0.1:9090.
@@ -33,11 +33,11 @@ RUN apt-get update && apt-get install -y openssh-server \
     && rm -rf /var/lib/apt/lists/*
 
 RUN echo 'root:root' | chpasswd \
-    && printf 'Port 222\nPermitRootLogin yes\nUsePAM no\n' \
+    && printf 'Port 23\nPermitRootLogin yes\nUsePAM no\n' \
        > /etc/ssh/sshd_config.d/rover_sensors.conf
 
 # Documentation only - host networking ignores EXPOSE.
-EXPOSE 222
+EXPOSE 23
 
 ##################################### Claude Code CLI ####################################
 
