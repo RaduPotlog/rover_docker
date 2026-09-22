@@ -26,7 +26,8 @@ version: '2.4'
 #                              body_link; unset = URDF default
 # ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit-ws is not started (sshd on 26 stays up)
 # ROVER_DRIVE_*                drive-interface: on/off, http port, login, teleop speed limits (m/s, rad/s),
-#                              rim-speed limit + track width (keep equal to rover_crsf_teleop.yaml);
+#                              rim-speed limit + track width (keep equal to rover_crsf_teleop.yaml),
+#                              stick expo per axis (0 linear .. 1 softest);
 #                              no password = nginx is not started (the container idles, sshd on 25 only)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
@@ -99,6 +100,8 @@ services:
       ROVER_DRIVE_MAX_ANGULAR: '1.0'
       ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
@@ -158,6 +161,8 @@ services:
       ROVER_DRIVE_MAX_ANGULAR: '1.0'
       ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -209,6 +214,8 @@ services:
       ROVER_DRIVE_MAX_ANGULAR: '1.0'
       ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
   rover-cockpit:
     build:
       context: ./rover_cockpit
@@ -262,6 +269,8 @@ services:
       ROVER_DRIVE_MAX_ANGULAR: '1.0'
       ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
     healthcheck:
       # A script in the image reads ROVER_COCKPIT_PORT at run time. No `$` here: balena's
       # compose parser mangles `$$`, which made this check fail forever and restart cockpit.
@@ -321,6 +330,8 @@ services:
       ROVER_DRIVE_MAX_ANGULAR: '1.0'
       ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
     healthcheck:
       # Script in the image (reads ROVER_DRIVE_PORT); no `$` here, see rover-cockpit.
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
