@@ -388,6 +388,7 @@ per build. The image runs no ROS itself, but carries `claude` and `ros-mcp` like
 | `ROVER_DRIVE_USER` | `rover` | Login user. |
 | `ROVER_DRIVE_PASSWORD` | *(unset)* | Required. Without it nginx is not started and the container idles (sshd only), logging an error. |
 | `ROVER_DRIVE_MAX_LINEAR` / `_ANGULAR` | `1.0` / `1.0` | 100 % speed preset in m/s / rad/s; the presets are 20/50/80/100 % of it. The drive controller clamps at 1.2 m/s, 1.0 rad/s. |
+| `ROVER_DRIVE_MAX_RIM_SPEED` / `_TRACK_WIDTH` | `1.7` / `1.0204` | Outer-wheel rim-speed budget (m/s) and effective track width (m), as `max_wheel_rim_speed` / `effective_track_width` in rover_crsf_teleop.yaml: above the budget v and w are scaled together, keeping the arc. `0` disables the limit. |
 
 Limitations:
 

@@ -69,7 +69,9 @@ cat > /tmp/drive-config.json <<JSON
   "namespace": "$(json_str "${ROVER_NAMESPACE:-}")",
   "robotName": "$(json_str "${ROVER_DRIVE_ROBOT_NAME:-${ROVER_NAMESPACE:-rover}}")",
   "maxLinear": $(num_or "${ROVER_DRIVE_MAX_LINEAR:-}" 1.0),
-  "maxAngular": $(num_or "${ROVER_DRIVE_MAX_ANGULAR:-}" 1.0)
+  "maxAngular": $(num_or "${ROVER_DRIVE_MAX_ANGULAR:-}" 1.0),
+  "maxRimSpeed": $(num_or "${ROVER_DRIVE_MAX_RIM_SPEED:-}" 1.7),
+  "trackWidth": $(num_or "${ROVER_DRIVE_TRACK_WIDTH:-}" 1.0204)
 }
 JSON
 
