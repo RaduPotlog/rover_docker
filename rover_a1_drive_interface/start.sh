@@ -73,7 +73,9 @@ cat > /tmp/drive-config.json <<JSON
   "maxRimSpeed": $(num_or "${ROVER_DRIVE_MAX_RIM_SPEED:-}" 1.7),
   "trackWidth": $(num_or "${ROVER_DRIVE_TRACK_WIDTH:-}" 1.0204),
   "expoLinear": $(num_or "${ROVER_DRIVE_EXPO_LINEAR:-}" 0.3),
-  "expoAngular": $(num_or "${ROVER_DRIVE_EXPO_ANGULAR:-}" 0.5)
+  "expoAngular": $(num_or "${ROVER_DRIVE_EXPO_ANGULAR:-}" 0.5),
+  "auxOutputNames": "$(json_str "${ROVER_DRIVE_AUX_OUTPUT_NAMES:-}")",
+  "auxInputNames": "$(json_str "${ROVER_DRIVE_AUX_INPUT_NAMES:-}")"
 }
 JSON
 

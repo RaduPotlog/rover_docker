@@ -146,6 +146,13 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
+> **Temporary branch defaults (aux IO).** On the `feature/aux-io-portenta-dio` branch of this
+> repo, the Dockerfiles default `ROVER_ROS_REF` (platform and orchestrator) and
+> `ROVER_DRIVE_INTERFACE_REF` to `feature/aux-io-portenta-dio` instead of `master`. That branch
+> is where rover_ros adds the safety PLC's aux IO and rover_drive_interface adds its popup. Both
+> branches must exist on GitHub before a build. Set the defaults back to `master` once they are
+> merged.
+
 Select specific application commits instead of branch tips with:
 
 ```bash
@@ -390,6 +397,7 @@ per build. The image runs no ROS itself, but carries `claude` and `ros-mcp` like
 | `ROVER_DRIVE_MAX_LINEAR` / `_ANGULAR` | `1.0` / `1.0` | 100 % speed preset in m/s / rad/s; the presets are 20/50/80/100 % of it. The drive controller clamps at 1.2 m/s, 1.0 rad/s. |
 | `ROVER_DRIVE_MAX_RIM_SPEED` / `_TRACK_WIDTH` | `1.7` / `1.0204` | Outer-wheel rim-speed budget (m/s) and effective track width (m), as `max_wheel_rim_speed` / `effective_track_width` in rover_crsf_teleop.yaml: above the budget v and w are scaled together, keeping the arc. `0` disables the limit. |
 | `ROVER_DRIVE_EXPO_LINEAR` / `_ANGULAR` | `0.3` / `0.5` | Stick expo per axis, `0` (linear) to `1` (softest): small stick moves give much less speed, full stick is still full speed. Out-of-range values fall back to the default. |
+| `ROVER_DRIVE_AUX_OUTPUT_NAMES` / `ROVER_DRIVE_AUX_INPUT_NAMES` | unset | Names for the six aux outputs (PLC DIO00..05) and inputs (DIO06..11) in the Aux IO popup, comma-separated in order, e.g. `Beacon,Tool power,,,,`. A blank or missing entry keeps the default name ("Output 3" and so on). |
 
 Limitations:
 
