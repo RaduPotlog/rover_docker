@@ -10,9 +10,7 @@ RUN apt-get update \
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_DRIVE_INTERFACE_REF=<sha>` for a reproducible build instead.
 # Same convention as ROVER_COCKPIT_REF / ROVER_ROS_REF in the other services.
-# TEMPORARY (feature/aux-io-portenta-dio): tracks the Aux IO popup branch instead of master,
-# to match rover_ros on the same branch. Set back to master once both are merged.
-ARG ROVER_DRIVE_INTERFACE_REF=feature/aux-io-portenta-dio
+ARG ROVER_DRIVE_INTERFACE_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_drive_interface.git /src \
     && git -C /src checkout ${ROVER_DRIVE_INTERFACE_REF}
 

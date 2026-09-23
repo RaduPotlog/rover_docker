@@ -146,13 +146,6 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
-> **Temporary branch defaults (aux IO).** On the `feature/aux-io-portenta-dio` branch of this
-> repo, the Dockerfiles default `ROVER_ROS_REF` (platform and orchestrator) and
-> `ROVER_DRIVE_INTERFACE_REF` to `feature/aux-io-portenta-dio` instead of `master`. That branch
-> is where rover_ros adds the safety PLC's aux IO and rover_drive_interface adds its popup. Both
-> branches must exist on GitHub before a build. Set the defaults back to `master` once they are
-> merged.
-
 Select specific application commits instead of branch tips with:
 
 ```bash
