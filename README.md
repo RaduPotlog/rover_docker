@@ -10,7 +10,8 @@ service's build context in `docker-compose.yml`:
 
 | Service            | Folder              | Contents                                                                   |
 |--------------------|---------------------|----------------------------------------------------------------------------|
-| `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, Zenoh router, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
+| `rover-a1-zenoh-router`  | `rover_a1_zenoh_router/`  | Ubuntu 26.04 + `rmw_zenoh_cpp` only: the Zenoh router (`rmw_zenohd`) on 7447 that every ROS process connects to, as the container's only process. Its own service so platform restarts and releases leave the ROS graph up. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh) |
+| `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
 | `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 24 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
 | `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices), plus an sshd on port 26 and the Claude Code CLI with `ros-mcp` registered |
@@ -19,6 +20,10 @@ service's build context in `docker-compose.yml`:
 ```
 rover_docker/
 ├── docker-compose.yml
+├── rover_a1_zenoh_router/
+│   ├── Dockerfile
+│   ├── healthcheck.sh
+│   └── start.sh
 ├── rover_a1_platform/
 │   ├── Dockerfile
 │   └── start.sh
@@ -146,6 +151,13 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
+> **Temporary branch defaults (Zenoh client mode).** On the `rover_zenoh_improvements` branch of this repo, the
+> Dockerfiles default `ROVER_ROS_REF` (platform and orchestrator), `ROVER_ORCHESTRATOR_REF`,
+> `ROVER_SENSORS_REF` and `ROVER_COCKPIT_REF` to `rover_zenoh_improvements` instead of `master`, and
+> rover_orchestrator's branch points `autonomy_deps.repos` at the same branch of
+> rover_pointcloud_crop_box. All of those branches must exist on GitHub before a build. Set the
+> defaults back to `master` once they are merged.
+
 Select specific application commits instead of branch tips with:
 
 ```bash
@@ -188,7 +200,7 @@ All containers use host networking, so these bind directly to the device:
 | 26     | sshd (`rover-cockpit`)               |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
-| 7447   | Zenoh router (loopback + rover LAN only, see below) |
+| 7447   | Zenoh router (`rover-a1-zenoh-router`; loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **every** container |
 | 10110/udp | RUTX11 NMEA forwarding → GNSS driver (`rover-a1-sensors`) |
@@ -197,7 +209,7 @@ All containers use host networking, so these bind directly to the device:
 
 Host networking gives every container a single port space, so each sshd has its own port —
 platform **22**, sensors **23**, orchestrator **24**, drive-interface **25**, cockpit **26**.
-`rover-a1-orchestrator` runs **no Zenoh router** of its own, joining the existing one on 7447 as a session (see
+No ROS container runs a Zenoh router of its own: they all join `rover-a1-zenoh-router` on 7447 (see
 [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
 
 That sshd takes the same credentials as `rover-a1-platform`'s — root password login, baked
@@ -211,7 +223,7 @@ into the image. Only the port differs: `ssh -p 24 root@<rover-lan-ip>`. See
 `PermitRootLogin yes`, `UsePAM no` — through a `/etc/ssh/sshd_config.d/` drop-in.
 
 ```bash
-ssh root@<rover-lan-ip>             # 22  platform: drivers, Zenoh router, bringup
+ssh root@<rover-lan-ip>             # 22  platform: drivers, bringup, web bridges
 ssh -p 23 root@<rover-lan-ip>       # 23  sensors: GNSS + lidar drivers
 ssh -p 24 root@<rover-lan-ip>       # 24  orchestrator: Nav 2 + mission manager
 ssh -p 25 root@<rover-lan-ip>       # 25  drive interface: nginx
@@ -413,7 +425,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
-| `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. Zenoh, sshd and the web bridges still run. The orchestrator also stays idle, since there is no platform to drive. |
+| `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. sshd and the web bridges still run (and the Zenoh router, in its own service). The orchestrator also stays idle, since there is no platform to drive. |
 | `ROVER_START_NAVIGATION` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
 | `ROVER_START_MISSION_MANAGER` | `false` | orchestrator | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. |
 | `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. It also idles when both `ROVER_USE_GPS` and `ROVER_USE_LIDAR` are false, since there is no driver to run. |
@@ -423,10 +435,12 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
+| `ROVER_ZENOH_MODE` | `client` | platform, orchestrator, sensors | How each ROS process joins the graph. `client`: it connects only to `rover-a1-zenoh-router`, which carries all traffic. `peer`: `rmw_zenoh_cpp`'s default, where every process also links directly to every other one — the rollback switch. With ~35 processes that was ~600 loopback links, and a group of processes shutting down stalled the others for seconds. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh). Keep it equal across services. |
 | `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF; it publishes `map → odom` only with `ROVER_GPS_PUBLISH_MAP_TF=true`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
 | `ROVER_GPS_PUBLISH_MAP_TF` | `false` | platform, orchestrator | Only matters with `ROVER_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
-| `ROVER_LAN_IP` | `192.168.1.201` | platform | Rover LAN address the Zenoh router binds. |
+| `ROVER_FOXGLOVE_TOPIC_WHITELIST` | *(unset)* | platform | `foxglove_bridge`'s `topic_whitelist`. Unset: only the topics the drive UI and the Cockpit use (listed in `rover_bringup/launch/rover_web_bridges.launch.py`), because anything a browser subscribes to crosses the Zenoh router at full rate. Set `['.*']` to see the whole graph in Foxglove Studio while debugging. |
+| `ROVER_LAN_IP` | `192.168.1.201` | zenoh-router | Rover LAN address the Zenoh router binds. Not in `docker-compose.yml`; set it in balenaCloud to change it. |
 | `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps`, `slam`, `amcl` or `indoor`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox), `amcl` (nav2_amcl) and `indoor` all require `ROVER_USE_GPS=false` or `ROVER_GPS_PUBLISH_MAP_TF=false` — exactly one process may publish `map → odom`. `amcl` localizes on a fixed `ROVER_NAV_MAP` and needs `ROVER_USE_LIDAR=true`. **`indoor`** is the mode for the [drive interface](#drive-interface): `rover_indoor_nav_manager` runs slam_toolbox while you record a map and map_server + AMCL on a saved one, switching at runtime; maps, places and the last pose live in the `rover-maps` volume (`/maps/<name>/`), and `ROVER_NAV_MAP` / `ROVER_AMCL_INITIAL_POSE_*` are ignored. An unrecognized value is ignored with a warning. |
 | `ROVER_NAV_MAP` | *(unset)* | orchestrator | Optional path to a map yaml inside the container; defaults to `rover_navigation`'s `empty_world.yaml`. **Required with `ROVER_LOCALIZATION_SOURCE=amcl`** — AMCL cannot localize against the empty default, so build a map with `=slam` first and point this at `/maps/map.yaml`. |
 | `ROVER_AMCL_INITIAL_POSE_X` / `_Y` / `_YAW` | `0.0` | orchestrator | Pose AMCL is seeded with at startup, in the map frame. The default is correct only when the map origin is where the rover parks, i.e. the slam run started there. Find it with `ros2 run tf2_ros tf2_echo rover/map rover/base_link`. |
@@ -502,9 +516,9 @@ router over the rover LAN (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-
 chosen `localization_source` identical on both sides.
 
 The container runs no Zenoh router of its own: host networking puts it in the same network
-namespace as `rover-a1-platform`, so `rmw_zenoh_cpp` connects to `tcp/127.0.0.1:7447`.
-`start.sh` waits up to 60 s for that port before launching, because balena does not order
-service startup.
+namespace as `rover-a1-zenoh-router`, so `rmw_zenoh_cpp` connects to `tcp/127.0.0.1:7447`.
+`start.sh` waits up to 60 s for that port before launching (`depends_on` orders the start, but
+not readiness).
 
 ## ROS namespace
 
@@ -520,15 +534,34 @@ all-services balenaCloud variable is the safe way to do that.
 
 ## ROS 2 over the rover LAN (Zenoh)
 
-The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router in `rover-a1-platform`
-listens on loopback and on the rover LAN address only (default
-`192.168.1.201`, override with the balenaCloud variable `ROVER_LAN_IP`).
-balenaVPN and GSM are deliberately not bound. The router has no
-authentication, so any host on the rover LAN can join the graph.
+The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router runs in its own service,
+`rover-a1-zenoh-router`, as that container's only process. A platform restart or a balena
+release that doesn't touch its image leaves it (and so the graph) up. It listens on loopback
+and on the rover LAN address only (default `192.168.1.201`, override with the balenaCloud
+variable `ROVER_LAN_IP`). balenaVPN and GSM are deliberately not bound. The router has no
+authentication, so any host on the rover LAN can join the graph. It is configured with
+`ZENOH_CONFIG_OVERRIDE` on top of `rmw_zenoh_cpp`'s packaged router defaults, not with a json5
+file, which would replace those defaults wholesale.
 
 If the LAN address isn't on the device within ~10 s of startup, the router
 falls back to loopback-only (logged as a `WARNING`) until the container
 restarts.
+
+Every ROS process on the rover is a Zenoh **client** of that router (`ROVER_ZENOH_MODE=client`,
+the default): one TCP link each, and all traffic goes through the router. `start.sh` exports
+the client settings as `ZENOH_CONFIG_OVERRIDE` for everything it launches:
+
+- `connect/timeout_ms=-1`: a process started before the router waits for it rather than
+  aborting with `RCLBadAlloc`.
+- `connect/retry` backs off from 0.5 s to 2 s, so after a router restart every process
+  reconnects and re-declares its publishers and subscriptions. The rover stops meanwhile:
+  `cmd_vel` times out.
+
+`ros2` in an SSH shell gets the same settings with a 5 s timeout, so a command fails fast while
+the router is down. `.bashrc` sources them from `/tmp/rover_zenoh_cli.env`, which `start.sh`
+writes. `ROVER_ZENOH_MODE=peer` switches back to rmw_zenoh's default full mesh. Check which one
+is running with `awk 'FNR>1 && $4=="01"' /proc/net/tcp /proc/net/tcp6 | wc -l`: roughly twice
+the number of ROS processes in client mode, and several hundred in peer mode.
 
 To join from a LAN host running ROS 2 Lyrical with `rmw_zenoh_cpp`, run a local
 router that dials the rover, then start nodes as usual:

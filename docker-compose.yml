@@ -5,6 +5,11 @@ version: '2.4'
 # them. `KEY: 'value'` is a default; `KEY:` stays unset unless balenaCloud sets it.
 #
 # ROVER_NAMESPACE              ROS namespace and TF prefix; keep it equal on every service
+# ROVER_ZENOH_MODE             platform, orchestrator, sensors: client (default) = every ROS process
+#                              connects only to rover-a1-zenoh-router; peer = rmw_zenoh's default
+#                              full mesh (the rollback). Keep it equal on every service
+# ROVER_FOXGLOVE_TOPIC_WHITELIST platform: foxglove_bridge topic_whitelist; unset = only the topics
+#                              the web UIs use (rover_web_bridges.launch.py), "['.*']" = everything
 # ROVER_START_ROS_PLATFORM     platform: run rover_bringup (the only switch on by default)
 # ROVER_START_NAVIGATION       orchestrator: run Nav 2 (also needs ROVER_START_ROS_PLATFORM)
 # ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2
@@ -30,13 +35,84 @@ version: '2.4'
 #                              stick expo per axis (0 linear .. 1 softest);
 #                              no password = nginx is not started (the container idles, sshd on 25 only)
 #
-# All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (run by the
-# platform), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly.
+# All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (its own
+# service, rover-a1-zenoh-router, so it keeps running while the others restart), and the sensors
+# receive UDP (NMEA 10110, RS16 6699/7788) directly.
 
 services:
+  # The Zenoh router (rmw_zenohd) all ROS processes connect to. Its own service, so platform
+  # restarts and releases don't take the ROS graph down with it: the image only changes with
+  # the ROS release. Binds 127.0.0.1:7447 plus ROVER_LAN_IP (default 192.168.1.201) for PCs on
+  # the rover LAN (setup_rover_pc.sh). It reads only ROVER_LAN_IP (a balenaCloud variable); the
+  # ROVER_* list below is there to keep every service's list the same.
+  rover-a1-zenoh-router:
+    build:
+      context: ./rover_a1_zenoh_router
+    restart: always
+    network_mode: host
+    environment:
+      ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_START_ROS_PLATFORM: 'true'
+      ROVER_START_NAVIGATION: 'false'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_SENSORS: 'false'
+      ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
+      ROVER_USE_LIDAR: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
+      ROVER_GPS_LOCALIZATION_X:
+      ROVER_GPS_LOCALIZATION_Y:
+      ROVER_GPS_LOCALIZATION_Z:
+      ROVER_GPS_ORIENTATION_R:
+      ROVER_GPS_ORIENTATION_P:
+      ROVER_GPS_ORIENTATION_Y:
+      ROVER_IMU_LOCALIZATION_X:
+      ROVER_IMU_LOCALIZATION_Y:
+      ROVER_IMU_LOCALIZATION_Z:
+      ROVER_IMU_ORIENTATION_R:
+      ROVER_IMU_ORIENTATION_P:
+      ROVER_IMU_ORIENTATION_Y:
+      ROVER_LIDAR_LOCALIZATION_X:
+      ROVER_LIDAR_LOCALIZATION_Y:
+      ROVER_LIDAR_LOCALIZATION_Z:
+      ROVER_LIDAR_ORIENTATION_R:
+      ROVER_LIDAR_ORIENTATION_P:
+      ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_COCKPIT_PORT: '80'
+      ROVER_COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
+      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
+      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+    healthcheck:
+      # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here, see rover-cockpit.
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
   rover-a1-platform:
     build:
       context: ./rover_a1_platform
+    # Start order only; start.sh still waits until the router accepts connections.
+    depends_on:
+      - rover-a1-zenoh-router
     # Direct hardware access for the rover drivers.
     privileged: true
     restart: always
@@ -57,6 +133,8 @@ services:
       - rover-config:/config
     environment:
       ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -105,6 +183,9 @@ services:
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
+    # Start order only; start.sh still waits until the router accepts connections.
+    depends_on:
+      - rover-a1-zenoh-router
     restart: always
     # Its sshd listens on 24 (one SSH port per container in the shared host network: platform 22,
     # sensors 23, orchestrator 24, drive-interface 25, cockpit 26).
@@ -118,6 +199,8 @@ services:
       - rover-maps:/maps
     environment:
       ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -166,11 +249,16 @@ services:
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
+    # Start order only; start.sh still waits until the router accepts connections.
+    depends_on:
+      - rover-a1-zenoh-router
     restart: always
     # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
     network_mode: host
     environment:
       ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -226,6 +314,8 @@ services:
       - NET_RAW
     environment:
       ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -287,6 +377,8 @@ services:
     network_mode: host
     environment:
       ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'

@@ -99,7 +99,8 @@ RUN apt-get update && apt-get install -y \
 # Source ROS 2 in bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
-RUN echo "export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5" >> /root/.bashrc
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 
 ####################################### Install ROVER Firmware ##########################
@@ -113,7 +114,11 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-ARG ROVER_ROS_REF=master
+# TEMPORARY (rover_zenoh_improvements): tracks that branch of rover_ros
+# instead of master, so this branch's images build the Zenoh client-mode changes. Set
+# back to master once merged (see README, "Temporary branch defaults").
+# Keep it equal in rover_a1_platform and rover_a1_orchestrator.
+ARG ROVER_ROS_REF=rover_zenoh_improvements
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc
