@@ -12,10 +12,7 @@ RUN apt-get update \
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_COCKPIT_REF=<sha>` for a reproducible build instead.
 # Same convention as ROVER_ROS_REF in the other services.
-# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks that branch of
-# rover_cockpit_ros2_diagnostics instead of master (it carries the Zenoh client-mode changes). Set
-# back to master once merged (see README, "Temporary branch defaults").
-ARG ROVER_COCKPIT_REF=rover-clean-arch-ultra-code-effort-01
+ARG ROVER_COCKPIT_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics.git /src \
     && git -C /src checkout ${ROVER_COCKPIT_REF}
 

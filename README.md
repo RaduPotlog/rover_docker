@@ -151,16 +151,6 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
-> **Temporary branch defaults (Clean Architecture + Zenoh client mode).** On the
-> `rover-clean-arch-ultra-code-effort-01` branch of this repo, the Dockerfiles default `ROVER_ROS_REF`
-> (platform and orchestrator, kept equal), `ROVER_ORCHESTRATOR_REF`, `ROVER_SENSORS_REF` and
-> `ROVER_COCKPIT_REF` to `rover-clean-arch-ultra-code-effort-01` instead of `master`, and
-> rover_orchestrator's branch of that name points `autonomy_deps.repos` at the same branch of
-> rover_pointcloud_crop_box. In rover_ros that branch carries the Clean Architecture fixes with
-> `rover_zenoh_improvements` merged in; in the other repositories it starts at their
-> `rover_zenoh_improvements` tip. All of those branches must exist on GitHub before a build. Set the
-> defaults back to `master` once they are merged.
-
 Select specific application commits instead of branch tips with:
 
 ```bash

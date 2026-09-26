@@ -118,10 +118,7 @@ WORKDIR /root/ros2_ws/rover_a1
 
 # Tracks master by default, so every `--nocache` build picks up the latest commit; pin with
 # --build-arg ROVER_SENSORS_REF=<ref>.
-# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks that branch of rover_sensors instead
-# of master (it carries the Zenoh client-mode changes). Set back to master once merged (see README,
-# "Temporary branch defaults").
-ARG ROVER_SENSORS_REF=rover-clean-arch-ultra-code-effort-01
+ARG ROVER_SENSORS_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_sensors.git src/rover_sensors \
     && git -C src/rover_sensors checkout ${ROVER_SENSORS_REF}
 
