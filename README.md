@@ -435,7 +435,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
-| `ROVER_ZENOH_MODE` | `client` | platform, orchestrator, sensors | How each ROS process joins the graph. `client`: it connects only to `rover-a1-zenoh-router`, which carries all traffic. `peer`: `rmw_zenoh_cpp`'s default, where every process also links directly to every other one — the rollback switch. With ~35 processes that was ~600 loopback links, and a group of processes shutting down stalled the others for seconds. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh). Keep it equal across services. |
+| `ROVER_ZENOH_MODE` | platform `peer`, orchestrator and sensors `client` | platform, orchestrator, sensors | How each container's ROS processes join the graph. `peer`: direct links between processes, plus one to the router. `client`: one link each, to `rover-a1-zenoh-router`. The split keeps the platform's control loops independent of the router, which stalls for up to a minute while cleaning up after an orchestrator restart. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh) before changing it. |
 | `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF; it publishes `map → odom` only with `ROVER_GPS_PUBLISH_MAP_TF=true`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
 | `ROVER_GPS_PUBLISH_MAP_TF` | `false` | platform, orchestrator | Only matters with `ROVER_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
@@ -547,21 +547,43 @@ If the LAN address isn't on the device within ~10 s of startup, the router
 falls back to loopback-only (logged as a `WARNING`) until the container
 restarts.
 
-Every ROS process on the rover is a Zenoh **client** of that router (`ROVER_ZENOH_MODE=client`,
-the default): one TCP link each, and all traffic goes through the router. `start.sh` exports
-the client settings as `ZENOH_CONFIG_OVERRIDE` for everything it launches:
+The rover mixes the two ways a ROS process can join Zenoh, per container
+(`ROVER_ZENOH_MODE`):
+
+- **`rover-a1-platform`: `peer`** (rmw_zenoh's default). Its processes link directly to each
+  other, so the control loops (IMU → EKF, `cmd_vel` → twist_mux → ros2_control, safety) never
+  wait on the router. They also link to the router, for everything crossing containers.
+- **`rover-a1-orchestrator`, `rover-a1-sensors`: `client`.** One TCP link each, to the router,
+  which carries all their traffic. These are the containers whose processes come and go (Nav 2
+  restarts, indoor mapping ↔ localization switches). When a group of clients stops, only the
+  router cleans up after it, not every process on the rover.
+
+Why the split, measured on the rover on 2026-09-26. After an orchestrator restart the router
+spends up to a minute at 100 % of one core cleaning up. It forwards nothing meanwhile.
+
+| Setup | Platform topics (`imu/data`, `odom`, `/tf`) during an orchestrator restart |
+|---|---|
+| All peers (the old default) | 1–4 s stalls; ~600 loopback links |
+| All clients | stopped for 31–58 s |
+| Platform peers, the rest clients | worst gap 0.15 s; 0.13 s over six mapping ↔ localization switches |
+
+Traffic between containers still waits on the router during such a restart (`scan` into Nav 2,
+Nav 2's `cmd_vel`), which only matters while navigation is down anyway.
+
+`start.sh` exports the client settings as `ZENOH_CONFIG_OVERRIDE` for everything it launches in
+client mode:
 
 - `connect/timeout_ms=-1`: a process started before the router waits for it rather than
-  aborting with `RCLBadAlloc`.
+  aborting with `RCLBadAlloc` (peers wait by default).
 - `connect/retry` backs off from 0.5 s to 2 s, so after a router restart every process
-  reconnects and re-declares its publishers and subscriptions. The rover stops meanwhile:
-  `cmd_vel` times out.
+  reconnects and re-declares its publishers and subscriptions. Platform peers keep talking to
+  each other meanwhile; cross-container traffic resumes when the router is back.
 
-`ros2` in an SSH shell gets the same settings with a 5 s timeout, so a command fails fast while
-the router is down. `.bashrc` sources them from `/tmp/rover_zenoh_cli.env`, which `start.sh`
-writes. `ROVER_ZENOH_MODE=peer` switches back to rmw_zenoh's default full mesh. Check which one
-is running with `awk 'FNR>1 && $4=="01"' /proc/net/tcp /proc/net/tcp6 | wc -l`: roughly twice
-the number of ROS processes in client mode, and several hundred in peer mode.
+`ros2` in an SSH shell is always a client, with a 5 s timeout, in every container: a command
+fails fast while the router is down and stays out of the platform's mesh. `.bashrc` sources it
+from `/tmp/rover_zenoh_cli.env`, which `start.sh` writes. Count the links with
+`awk 'FNR>1 && $4=="01"' /proc/net/tcp /proc/net/tcp6 | wc -l`: about 390 socket ends with the
+default split, and 70 if every process were a client.
 
 To join from a LAN host running ROS 2 Lyrical with `rmw_zenoh_cpp`, run a local
 router that dials the rover, then start nodes as usual:

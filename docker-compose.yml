@@ -5,9 +5,11 @@ version: '2.4'
 # them. `KEY: 'value'` is a default; `KEY:` stays unset unless balenaCloud sets it.
 #
 # ROVER_NAMESPACE              ROS namespace and TF prefix; keep it equal on every service
-# ROVER_ZENOH_MODE             platform, orchestrator, sensors: client (default) = every ROS process
-#                              connects only to rover-a1-zenoh-router; peer = rmw_zenoh's default
-#                              full mesh (the rollback). Keep it equal on every service
+# ROVER_ZENOH_MODE             platform, orchestrator, sensors: how their ROS processes join Zenoh.
+#                              peer = direct links between processes (platform default, so its
+#                              control loops never wait on the router); client = one link to
+#                              rover-a1-zenoh-router (orchestrator and sensors default). See
+#                              README.md "ROS 2 over the rover LAN" before changing either
 # ROVER_FOXGLOVE_TOPIC_WHITELIST platform: foxglove_bridge topic_whitelist; unset = only the topics
 #                              the web UIs use (rover_web_bridges.launch.py), "['.*']" = everything
 # ROVER_START_ROS_PLATFORM     platform: run rover_bringup (the only switch on by default)
@@ -49,6 +51,10 @@ services:
     build:
       context: ./rover_a1_zenoh_router
     restart: always
+    # rmw_zenohd starts closing on SIGTERM but, with clients connected, never finishes (seen
+    # 2026-09-26: "close session" logged, then SIGKILL 10 s later). It holds no state, so kill it
+    # after 2 s: a restart then interrupts cross-container traffic for ~3 s instead of ~11 s.
+    stop_grace_period: 2s
     network_mode: host
     environment:
       ROVER_NAMESPACE: 'rover'
@@ -133,7 +139,7 @@ services:
       - rover-config:/config
     environment:
       ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'client'
+      ROVER_ZENOH_MODE: 'peer'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'

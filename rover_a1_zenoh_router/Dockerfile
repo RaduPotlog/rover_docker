@@ -1,11 +1,12 @@
 # rover-a1-zenoh-router: the Zenoh router (rmw_zenohd) every ROS process on the rover connects to.
 #
-# Its own service so it outlives the containers that use it. Every ROS process in
-# rover-a1-platform, rover-a1-orchestrator and rover-a1-sensors is a Zenoh client of this router
-# (ROVER_ZENOH_MODE, see README.md), so all ROS traffic between them passes through it. It used to
-# run inside rover-a1-platform, where it restarted whenever any platform process exited and on
-# every platform image update, taking the whole graph down with it. This image only changes when
-# the ROS release does, so a balena release leaves the router running.
+# Its own service so it outlives the containers that use it. The ROS processes in
+# rover-a1-orchestrator and rover-a1-sensors are Zenoh clients of this router, and
+# rover-a1-platform's peers reach them through it (ROVER_ZENOH_MODE, see README.md), so all
+# traffic between containers passes through it. It used to run inside rover-a1-platform, where
+# it restarted whenever any platform process exited and on every platform image update, taking
+# the whole graph down with it. This image only changes when the ROS release does, so a balena
+# release leaves the router running.
 #
 # Deliberately minimal: no sshd, no workspace, no Claude tooling - one process. Use the platform's
 # SSH (port 22) and `ros2` there to look at the graph.
