@@ -131,7 +131,10 @@ RUN mkdir -p /maps
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
 # packages are never built, `--packages-up-to rover_autonomy` stops short of them.
-ARG ROVER_ROS_REF=master
+# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks the Clean Architecture branch of
+# rover_ros instead of master. Set back to master once that branch is merged. Keep it equal in
+# rover_a1_platform and rover_a1_orchestrator (see README, ROVER_ROS_REF).
+ARG ROVER_ROS_REF=rover-clean-arch-ultra-code-effort-01
 ARG ROVER_ORCHESTRATOR_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}

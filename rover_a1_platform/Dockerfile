@@ -113,7 +113,10 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-ARG ROVER_ROS_REF=master
+# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks the Clean Architecture branch of
+# rover_ros instead of master. Set back to master once that branch is merged. Keep it equal in
+# rover_a1_platform and rover_a1_orchestrator (see README, ROVER_ROS_REF).
+ARG ROVER_ROS_REF=rover-clean-arch-ultra-code-effort-01
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc

@@ -146,6 +146,12 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
+> **Temporary branch default (Clean Architecture).** On the `rover-clean-arch-ultra-code-effort-01`
+> branch of this repo, the platform and orchestrator Dockerfiles default `ROVER_ROS_REF` to
+> `rover-clean-arch-ultra-code-effort-01` instead of `master`. That branch of rover_ros carries the
+> Clean Architecture audit fixes. It must exist on GitHub before a build. Set the default back to
+> `master` once it is merged.
+
 Select specific application commits instead of branch tips with:
 
 ```bash
