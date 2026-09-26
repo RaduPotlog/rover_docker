@@ -12,6 +12,8 @@ version: '2.4'
 #                              README.md "ROS 2 over the rover LAN" before changing either
 # ROVER_FOXGLOVE_TOPIC_WHITELIST platform: foxglove_bridge topic_whitelist; unset = only the topics
 #                              the web UIs use (rover_web_bridges.launch.py), "['.*']" = everything
+# ROVER_FOXGLOVE_SERVICE_WHITELIST platform: foxglove_bridge service_whitelist; unset = only the
+#                              services the web UIs call, "['.*']" = everything
 # ROVER_START_ROS_PLATFORM     platform: run rover_bringup (the only switch on by default)
 # ROVER_START_NAVIGATION       orchestrator: run Nav 2 (also needs ROVER_START_ROS_PLATFORM)
 # ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2
@@ -60,6 +62,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'client'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -141,6 +144,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'peer'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -207,6 +211,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'client'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -265,6 +270,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'client'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -322,6 +328,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'client'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
@@ -385,6 +392,7 @@ services:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'client'
       ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
