@@ -57,76 +57,53 @@ mkdir -p /config/rover_crsf_teleop
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /root/ros2_ws/rover_a1/install/setup.bash
 
-# **Zenoh Router - Background with proper management**
+# **Zenoh session mode** for every ROS process this container starts (ROVER_ZENOH_MODE; unset or
+# empty means peer).
+#   peer: rmw_zenoh's default - each process also links directly to the other peers. The
+#     platform runs this way, so its own traffic (imu -> EKF, cmd_vel -> twist_mux ->
+#     ros2_control, safety) never waits on the router.
+#   client: each process opens one link, to rover-a1-zenoh-router, and all its traffic goes
+#     through it. For the containers whose processes come and go (orchestrator, sensors): when
+#     a group of clients stops, only the router cleans up after it, not every process.
+#   Measured 2026-09-26: that cleanup keeps the router at 100 % of a core for up to a minute
+#   after an orchestrator restart, stalling everything routed through it. With the platform as
+#   clients too, imu/odom stopped for 31-58 s; with the platform as peers, 0.15 s. As full
+#   peer mesh (the old default), every stop stalled the other peers for 1-4 s.
+#   Clients wait for the router (timeout_ms=-1) and reconnect after a restart (retry); peers
+#   do both by default.
+# The ros2 CLI in an SSH shell is always a client with a 5 s timeout (.bashrc sources
+# /tmp/rover_zenoh_cli.env): it fails fast while the router is down and stays out of the mesh.
+case "${ROVER_ZENOH_MODE:-peer}" in
+  [Pp][Ee][Ee][Rr]) ROVER_ZENOH_MODE=peer ;;
+  [Cc][Ll][Ii][Ee][Nn][Tt]) ROVER_ZENOH_MODE=client ;;
+  *) ROVER_ZENOH_MODE=peer ;;
+esac
+ZENOH_ROUTER_ENDPOINT="tcp/127.0.0.1:7447"
+ZENOH_CLIENT_BASE="mode=\"client\";connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];listen/endpoints=[]"
+if [ "$ROVER_ZENOH_MODE" = client ]; then
+  export ZENOH_CONFIG_OVERRIDE="${ZENOH_CLIENT_BASE};connect/timeout_ms=-1;connect/retry={period_init_ms:500,period_max_ms:2000,period_increase_factor:2}"
+else
+  unset ZENOH_CONFIG_OVERRIDE
+fi
+printf "export ZENOH_CONFIG_OVERRIDE='%s'\n" "${ZENOH_CLIENT_BASE};connect/timeout_ms=5000" > /tmp/rover_zenoh_cli.env
+echo "Zenoh session mode: $ROVER_ZENOH_MODE"
+
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
-# The router is reachable on loopback plus the rover LAN address only, so
-# hosts on the rover LAN can join the ROS 2 graph while balenaVPN and GSM
-# stay closed (binding an address, not 0.0.0.0, is what keeps them out).
-# Override per device/fleet with the ROVER_LAN_IP balenaCloud variable.
-ROVER_LAN_IP=${ROVER_LAN_IP:-192.168.1.201}
-
-# Binding an address the host doesn't have makes rmw_zenohd exit, which
-# would crash-loop the whole container. Give DHCP/NetworkManager a moment,
-# then fall back to loopback-only so the rover still runs locally.
-ZENOH_LAN_ENDPOINT=""
-for _ in $(seq 1 10); do
-  if hostname -I | tr ' ' '\n' | grep -Fxq "$ROVER_LAN_IP"; then
-    ZENOH_LAN_ENDPOINT="\"tcp/${ROVER_LAN_IP}:7447\","
+# The router runs in its own service, rover-a1-zenoh-router, on 127.0.0.1:7447 (host networking).
+# Balena starts services in no particular order, so wait for it rather than assume it. Unlike the
+# payload containers this one does not start without it: exit, and `restart: always` retries.
+ZENOH_ROUTER_READY=false
+for _ in $(seq 1 60); do
+  if (exec 3<>/dev/tcp/127.0.0.1/7447) 2>/dev/null; then
+    ZENOH_ROUTER_READY=true
     break
   fi
   sleep 1
 done
-if [ -z "$ZENOH_LAN_ENDPOINT" ]; then
-  echo "WARNING: rover LAN address $ROVER_LAN_IP not present; Zenoh router is loopback-only until the container restarts"
-fi
-
-cat > /tmp/router.json5 << EOF
-{
-  // Router mode for Balena fleet
-  mode: "router",
-
-  // Loopback (both families: nodes resolve "localhost" and may pick ::1)
-  // plus the rover LAN address. Not 0.0.0.0 - that would expose the ROS 2
-  // graph on balenaVPN and GSM too.
-  listen: {
-    endpoints: [
-      ${ZENOH_LAN_ENDPOINT}
-      "tcp/127.0.0.1:7447",
-      "tcp/[::1]:7447"
-    ]
-  },
-
-  // Remote hosts dial in; the rover doesn't dial out
-  connect: {
-    endpoints: []
-  },
-
-  // No multicast scouting - LAN hosts connect to the router explicitly
-  scouting: {
-    multicast: {
-      enabled: false
-    }
-  }
-}
-EOF
-export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5
-
-# Kill any existing daemon (rmw_zenoh conflicts)
-pkill -f ros2_daemon || true
-sleep 1
-
-# Start Zenoh Router in background
-nohup ros2 run rmw_zenoh_cpp rmw_zenohd > /tmp/zenohd.log 2>&1 < /dev/null &
-ZENOHD_PID=$!
-CHILD_PIDS+=("$ZENOHD_PID")
-
-echo "Zenoh router started (PID: $ZENOHD_PID)"
-
-# Verify it's alive
-if ! kill -0 $ZENOHD_PID 2>/dev/null; then
-  echo "ERROR: rmw_zenohd failed to start. Check /tmp/zenohd.log"
-  cat /tmp/zenohd.log
+if [ "$ZENOH_ROUTER_READY" != true ]; then
+  echo "ERROR: Zenoh router (127.0.0.1:7447, rover-a1-zenoh-router) not reachable after 60 s"
+  terminate_children
   exit 1
 fi
 
@@ -173,7 +150,7 @@ echo "Web bridges (foxglove_bridge, rosbridge) started (PID: $BRIDGES_PID)"
 EXIT_CODE=0
 wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
-STATUS_ENTRIES=("sshd:$SSHD_PID" "zenohd:$ZENOHD_PID" "web_bridges:$BRIDGES_PID")
+STATUS_ENTRIES=("sshd:$SSHD_PID" "web_bridges:$BRIDGES_PID")
 if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
   STATUS_ENTRIES+=("rover_bringup:$ROVER_PID")
 fi

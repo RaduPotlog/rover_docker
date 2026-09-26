@@ -27,6 +27,39 @@ SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
 echo "sshd started on port 24 (PID: $SSHD_PID)"
 
+# **Zenoh session mode** for every ROS process this container starts (ROVER_ZENOH_MODE; unset or
+# empty means client).
+# Set before the idle gate below, so SSH shells get the CLI settings even while this
+# container idles.
+#   peer: rmw_zenoh's default - each process also links directly to the other peers. The
+#     platform runs this way, so its own traffic (imu -> EKF, cmd_vel -> twist_mux ->
+#     ros2_control, safety) never waits on the router.
+#   client: each process opens one link, to rover-a1-zenoh-router, and all its traffic goes
+#     through it. For the containers whose processes come and go (orchestrator, sensors): when
+#     a group of clients stops, only the router cleans up after it, not every process.
+#   Measured 2026-09-26: that cleanup keeps the router at 100 % of a core for up to a minute
+#   after an orchestrator restart, stalling everything routed through it. With the platform as
+#   clients too, imu/odom stopped for 31-58 s; with the platform as peers, 0.15 s. As full
+#   peer mesh (the old default), every stop stalled the other peers for 1-4 s.
+#   Clients wait for the router (timeout_ms=-1) and reconnect after a restart (retry); peers
+#   do both by default.
+# The ros2 CLI in an SSH shell is always a client with a 5 s timeout (.bashrc sources
+# /tmp/rover_zenoh_cli.env): it fails fast while the router is down and stays out of the mesh.
+case "${ROVER_ZENOH_MODE:-client}" in
+  [Pp][Ee][Ee][Rr]) ROVER_ZENOH_MODE=peer ;;
+  [Cc][Ll][Ii][Ee][Nn][Tt]) ROVER_ZENOH_MODE=client ;;
+  *) ROVER_ZENOH_MODE=client ;;
+esac
+ZENOH_ROUTER_ENDPOINT="tcp/127.0.0.1:7447"
+ZENOH_CLIENT_BASE="mode=\"client\";connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];listen/endpoints=[]"
+if [ "$ROVER_ZENOH_MODE" = client ]; then
+  export ZENOH_CONFIG_OVERRIDE="${ZENOH_CLIENT_BASE};connect/timeout_ms=-1;connect/retry={period_init_ms:500,period_max_ms:2000,period_increase_factor:2}"
+else
+  unset ZENOH_CONFIG_OVERRIDE
+fi
+printf "export ZENOH_CONFIG_OVERRIDE='%s'\n" "${ZENOH_CLIENT_BASE};connect/timeout_ms=5000" > /tmp/rover_zenoh_cli.env
+echo "Zenoh session mode: $ROVER_ZENOH_MODE"
+
 # Normalize a balenaCloud boolean the same way rover-a1-platform's start.sh does: unset or
 # empty falls back to $2, and anything that is not true/1/yes/on (any case) is false.
 norm_bool() {
@@ -118,13 +151,14 @@ fi
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /root/ros2_ws/rover_a1/install/setup.bash
 
-# Join the Zenoh graph as a session. The router itself runs in rover-a1-platform; both
-# containers are network_mode: host, so it is reachable on loopback. Deliberately no
-# ZENOH_ROUTER_CONFIG_URI here - a second router would fight the first one for port 7447.
+# Join the Zenoh graph (as a client, see ROVER_ZENOH_MODE above). The router runs in
+# rover-a1-zenoh-router; every service is network_mode: host, so it is reachable on loopback.
+# Deliberately no ZENOH_ROUTER_CONFIG_URI here - a second router would fight the first one for
+# port 7447.
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
 # Balena starts services in no particular order, so wait for the router rather than assume it.
-# Falls through with a warning: rmw_zenoh retries the connection on its own.
+# Falls through with a warning: in client mode each process waits for the router itself.
 ZENOH_ROUTER_READY=false
 for _ in $(seq 1 60); do
   if (exec 3<>/dev/tcp/127.0.0.1/7447) 2>/dev/null; then
@@ -134,7 +168,7 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [ "$ZENOH_ROUTER_READY" != true ]; then
-  echo "WARNING: Zenoh router (127.0.0.1:7447, rover-a1-platform) not reachable after 60 s; starting anyway"
+  echo "WARNING: Zenoh router (127.0.0.1:7447, rover-a1-zenoh-router) not reachable after 60 s; starting anyway"
 fi
 
 # Kill any existing daemon (rmw_zenoh conflicts)

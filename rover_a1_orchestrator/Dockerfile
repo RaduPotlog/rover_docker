@@ -1,8 +1,8 @@
 # rover-a1-orchestrator: the Rover A1 autonomy stack (Nav 2 + mission manager).
 #
 # Sibling of rover-a1-platform. That image owns the hardware (drivers, controllers,
-# localization, safety) and runs the Zenoh router; this one owns navigation only and joins
-# that router over host networking. Everything hardware-specific - the Modbus stack,
+# localization, safety); this one owns navigation only. Both join the Zenoh router in
+# rover-a1-zenoh-router over host networking. Everything hardware-specific - the Modbus stack,
 # rover_cppuprofile, libpcap, dbus - is deliberately absent here. Two things are exceptions.
 # An sshd, which listens on 24 rather than 22: host networking puts this container in
 # rover-a1-platform's network namespace, where that image's sshd already owns 22. And the
@@ -99,7 +99,7 @@ RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/r
 SHELL ["/bin/bash", "-c"]
 
 # ros-base, not desktop: this container has no GUI and no RViz. rmw_zenoh_cpp matches the
-# middleware rover-a1-platform's router speaks.
+# middleware rover-a1-zenoh-router speaks.
 RUN apt-get update && apt-get install -y \
     ros-dev-tools \
     ros-${ROS_DISTRO}-ros-base \
@@ -110,8 +110,10 @@ RUN apt-get update && apt-get install -y \
 
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 # No ZENOH_ROUTER_CONFIG_URI: this container is a Zenoh session, not a router. The router
-# runs in rover-a1-platform and both share the host network namespace.
+# runs in rover-a1-zenoh-router and every service shares the host network namespace.
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 # ENV PATH above reaches `docker exec`, but sshd builds a fresh environment for login shells,
 # so without this `ros-mcp` is off PATH over SSH and Claude fails to spawn the MCP server.
 RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
@@ -131,11 +133,11 @@ RUN mkdir -p /maps
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
 # packages are never built, `--packages-up-to rover_autonomy` stops short of them.
-# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks the Clean Architecture branch of
-# rover_ros instead of master. Set back to master once that branch is merged. Keep it equal in
-# rover_a1_platform and rover_a1_orchestrator (see README, ROVER_ROS_REF).
+# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks that branch of rover_ros and
+# rover_orchestrator instead of master. Set back to master once merged (see README, "Temporary
+# branch defaults"). Keep ROVER_ROS_REF equal in rover_a1_platform and rover_a1_orchestrator.
 ARG ROVER_ROS_REF=rover-clean-arch-ultra-code-effort-01
-ARG ROVER_ORCHESTRATOR_REF=master
+ARG ROVER_ORCHESTRATOR_REF=rover-clean-arch-ultra-code-effort-01
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orchestrator \

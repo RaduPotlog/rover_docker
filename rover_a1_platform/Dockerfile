@@ -99,7 +99,8 @@ RUN apt-get update && apt-get install -y \
 # Source ROS 2 in bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
-RUN echo "export ZENOH_ROUTER_CONFIG_URI=/tmp/router.json5" >> /root/.bashrc
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 
 ####################################### Install ROVER Firmware ##########################
@@ -113,9 +114,10 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks the Clean Architecture branch of
-# rover_ros instead of master. Set back to master once that branch is merged. Keep it equal in
-# rover_a1_platform and rover_a1_orchestrator (see README, ROVER_ROS_REF).
+# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks that branch of rover_ros instead of
+# master: the Clean Architecture fixes with rover_zenoh_improvements merged in. Set back to master
+# once merged (see README, "Temporary branch defaults"). Keep it equal in rover_a1_platform and
+# rover_a1_orchestrator.
 ARG ROVER_ROS_REF=rover-clean-arch-ultra-code-effort-01
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}

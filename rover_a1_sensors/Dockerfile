@@ -1,10 +1,10 @@
 # rover-a1-sensors: the Rover A1 sensor payload (GNSS, lidar) from the rover_sensors repo.
 #
-# Sibling of rover-a1-platform (base, controller, localization, safety; runs the Zenoh router)
+# Sibling of rover-a1-platform (base, controller, localization, safety)
 # and rover-a1-orchestrator (Nav 2, mission manager). The payload is kept in its own image so a
 # different GPS or lidar is a change to this image only: its drivers only publish (gps/fix,
 # scan, rslidar_points, diagnostics) and nothing here depends on rover_ros or
-# rover_orchestrator. Joins the platform's Zenoh router over host networking, which is also
+# rover_orchestrator. Joins rover-a1-zenoh-router's Zenoh router over host networking, which is also
 # what lets the drivers receive the RUTX11 NMEA (UDP 10110) and the RS16 (UDP 6699/7788).
 #
 # Deliberately lean apart from two things. An sshd on 23 (22 is rover-a1-platform's, 24 is
@@ -89,8 +89,8 @@ RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/r
 
 SHELL ["/bin/bash", "-c"]
 
-# ros-base, not desktop: no GUI here. rmw_zenoh_cpp matches the middleware rover-a1-platform's
-# router speaks. libpcap-dev: rover_rs16_lidar's pcap replay input (rosdep would also install
+# ros-base, not desktop: no GUI here. rmw_zenoh_cpp matches the middleware rover-a1-zenoh-router
+# speaks. libpcap-dev: rover_rs16_lidar's pcap replay input (rosdep would also install
 # it; listed so the dependency is visible here).
 RUN apt-get update && apt-get install -y \
     ros-dev-tools \
@@ -103,8 +103,10 @@ RUN apt-get update && apt-get install -y \
 
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 # No ZENOH_ROUTER_CONFIG_URI: this container is a Zenoh session, not a router. The router
-# runs in rover-a1-platform and both share the host network namespace.
+# runs in rover-a1-zenoh-router and every service shares the host network namespace.
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 # ENV PATH above reaches `docker exec`, but sshd builds a fresh environment for login shells,
 # so without this `ros-mcp` is off PATH over SSH and Claude fails to spawn the MCP server.
 RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
@@ -116,7 +118,10 @@ WORKDIR /root/ros2_ws/rover_a1
 
 # Tracks master by default, so every `--nocache` build picks up the latest commit; pin with
 # --build-arg ROVER_SENSORS_REF=<ref>.
-ARG ROVER_SENSORS_REF=master
+# TEMPORARY (rover-clean-arch-ultra-code-effort-01): tracks that branch of rover_sensors instead
+# of master (it carries the Zenoh client-mode changes). Set back to master once merged (see README,
+# "Temporary branch defaults").
+ARG ROVER_SENSORS_REF=rover-clean-arch-ultra-code-effort-01
 RUN git clone https://github.com/RaduPotlog/rover_sensors.git src/rover_sensors \
     && git -C src/rover_sensors checkout ${ROVER_SENSORS_REF}
 
