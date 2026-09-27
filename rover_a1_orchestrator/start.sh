@@ -72,6 +72,17 @@ norm_bool() {
 ROVER_START_ROS_PLATFORM=$(norm_bool "${ROVER_START_ROS_PLATFORM:-}" true)
 ROVER_START_NAVIGATION=$(norm_bool "${ROVER_START_NAVIGATION:-}" false)
 ROVER_START_MISSION_MANAGER=$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" false)
+# Driving modes (rover_drive_mode): routes the web UI's joystick to the platform (MANUAL, or
+# through the lidar collision monitor in ASSISTED) and gates Nav 2 to AUTOMATIC. On by
+# default and independent of ROVER_START_NAVIGATION: without it the drive UI cannot drive.
+ROVER_START_DRIVE_MODE=$(norm_bool "${ROVER_START_DRIVE_MODE:-}" true)
+case "${ROVER_DRIVE_DEFAULT_MODE:-assisted}" in
+  manual|assisted) ROVER_DRIVE_DEFAULT_MODE=${ROVER_DRIVE_DEFAULT_MODE:-assisted} ;;
+  *)
+    echo "WARNING: ROVER_DRIVE_DEFAULT_MODE='${ROVER_DRIVE_DEFAULT_MODE}' is not manual|assisted; using 'assisted'"
+    ROVER_DRIVE_DEFAULT_MODE=assisted
+    ;;
+esac
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_GPS_PUBLISH_MAP_TF=$(norm_bool "${ROVER_GPS_PUBLISH_MAP_TF:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
@@ -91,15 +102,82 @@ else
   START_ORCHESTRATOR=true
 fi
 
-# Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
-# service. Changing any balenaCloud variable restarts the container, which re-reads them here.
-if [ "$START_ORCHESTRATOR" != true ]; then
+START_DRIVE_MODE=false
+if [ "$ROVER_START_DRIVE_MODE" != true ]; then
+  echo "Drive modes disabled (ROVER_START_DRIVE_MODE=false): the drive UI's joystick reaches nothing"
+elif [ "$ROVER_START_ROS_PLATFORM" != true ]; then
+  echo "Drive modes disabled: ROVER_START_ROS_PLATFORM=false (no platform to drive)"
+else
+  START_DRIVE_MODE=true
+fi
+
+# Idle rather than exit when nothing is enabled: `restart: always` would otherwise crash-loop
+# this service. Changing any balenaCloud variable restarts the container, which re-reads them.
+if [ "$START_ORCHESTRATOR" != true ] && [ "$START_DRIVE_MODE" != true ]; then
   echo "Orchestrator stack disabled: ${DISABLED_REASON}; idling (sshd on 24 stays up)"
   # Not `exec sleep infinity` here: exec would replace this shell, dropping the TERM trap and
   # orphaning sshd. Waiting on sshd idles just as well and keeps signals forwarded.
   wait "$SSHD_PID" || true
   terminate_children
   exit 0
+fi
+
+# Source ROS2 + workspace
+source "/opt/ros/${ROS_DISTRO}/setup.bash"
+source /root/ros2_ws/rover_a1/install/setup.bash
+
+# Join the Zenoh graph (as a client, see ROVER_ZENOH_MODE above). The router runs in
+# rover-a1-zenoh-router; every service is network_mode: host, so it is reachable on loopback.
+# Deliberately no ZENOH_ROUTER_CONFIG_URI here - a second router would fight the first one for
+# port 7447.
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# Balena starts services in no particular order, so wait for the router rather than assume it.
+# Falls through with a warning: in client mode each process waits for the router itself.
+ZENOH_ROUTER_READY=false
+for _ in $(seq 1 60); do
+  if (exec 3<>/dev/tcp/127.0.0.1/7447) 2>/dev/null; then
+    ZENOH_ROUTER_READY=true
+    break
+  fi
+  sleep 1
+done
+if [ "$ZENOH_ROUTER_READY" != true ]; then
+  echo "WARNING: Zenoh router (127.0.0.1:7447, rover-a1-zenoh-router) not reachable after 60 s; starting anyway"
+fi
+
+# Kill any existing daemon (rmw_zenoh conflicts)
+pkill -f ros2_daemon || true
+sleep 1
+
+ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
+
+# **Drive modes - Background** (before the Nav 2 gate: MANUAL and ASSISTED need no Nav 2).
+if [ "$START_DRIVE_MODE" = true ]; then
+  nohup ros2 launch rover_drive_mode rover_drive_mode.launch.py \
+    use_sim_time:="${ROVER_USE_SIM_TIME}" \
+    namespace:="${ROVER_NAMESPACE}" \
+    default_mode:="${ROVER_DRIVE_DEFAULT_MODE}" \
+    > /tmp/rover_drive_mode.log 2>&1 < /dev/null &
+  DRIVE_MODE_PID=$!
+  CHILD_PIDS+=("$DRIVE_MODE_PID")
+  echo "Drive modes started in background (PID: $DRIVE_MODE_PID, boot mode: $ROVER_DRIVE_DEFAULT_MODE)"
+fi
+
+# Drive modes only: supervise them (and sshd) the same way as the full stack below.
+if [ "$START_ORCHESTRATOR" != true ]; then
+  echo "Nav 2 disabled: ${DISABLED_REASON}; running drive modes only (AUTOMATIC unavailable)"
+  EXIT_CODE=0
+  wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
+  for entry in "sshd:$SSHD_PID" "rover_drive_mode:$DRIVE_MODE_PID"; do
+    name=${entry%%:*}
+    pid=${entry##*:}
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+    fi
+  done
+  terminate_children
+  exit "$EXIT_CODE"
 fi
 
 # Nav 2's global frame owner. ROVER_USE_GPS decides it by default - 'gps' means
@@ -147,35 +225,6 @@ if [ "$ROVER_USE_LIDAR" != true ]; then
   echo "WARNING: ROVER_USE_LIDAR=false - no lidar driver in rover-a1-sensors, so the costmaps stay empty and navigation drives blind"
 fi
 
-# Source ROS2 + workspace
-source "/opt/ros/${ROS_DISTRO}/setup.bash"
-source /root/ros2_ws/rover_a1/install/setup.bash
-
-# Join the Zenoh graph (as a client, see ROVER_ZENOH_MODE above). The router runs in
-# rover-a1-zenoh-router; every service is network_mode: host, so it is reachable on loopback.
-# Deliberately no ZENOH_ROUTER_CONFIG_URI here - a second router would fight the first one for
-# port 7447.
-export RMW_IMPLEMENTATION=rmw_zenoh_cpp
-
-# Balena starts services in no particular order, so wait for the router rather than assume it.
-# Falls through with a warning: in client mode each process waits for the router itself.
-ZENOH_ROUTER_READY=false
-for _ in $(seq 1 60); do
-  if (exec 3<>/dev/tcp/127.0.0.1/7447) 2>/dev/null; then
-    ZENOH_ROUTER_READY=true
-    break
-  fi
-  sleep 1
-done
-if [ "$ZENOH_ROUTER_READY" != true ]; then
-  echo "WARNING: Zenoh router (127.0.0.1:7447, rover-a1-zenoh-router) not reachable after 60 s; starting anyway"
-fi
-
-# Kill any existing daemon (rmw_zenoh conflicts)
-pkill -f ros2_daemon || true
-sleep 1
-
-ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
 ROVER_NAV_MAP=${ROVER_NAV_MAP:-/root/ros2_ws/rover_a1/install/rover_navigation/share/rover_navigation/map/empty_world.yaml}
 
 # The default map is 50x50 m of free space. Every AMCL particle scores identically against it,
@@ -226,6 +275,9 @@ EXIT_CODE=0
 wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
 STATUS_ENTRIES=("sshd:$SSHD_PID" "rover_navigation:$NAV_PID")
+if [ "$START_DRIVE_MODE" = true ]; then
+  STATUS_ENTRIES+=("rover_drive_mode:$DRIVE_MODE_PID")
+fi
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
   STATUS_ENTRIES+=("rover_mission_manager:$MISSION_PID")
 fi

@@ -346,19 +346,27 @@ in. It is built for one rover and indoor navigation.
 - **Transport:** nginx serves the page and proxies the same-origin websocket `/ws` to
   foxglove_bridge on `127.0.0.1:8765`. Both sit behind the same basic-auth login, because
   foxglove_bridge itself has no authentication. The container runs no ROS.
-- **Neutral / Manual:** the page starts in **Neutral** and publishes nothing. **Manual**
-  publishes `<ns>/teleop_foxglove_cmd_vel_stamped` at 10 Hz (twist_mux priority 100, above
-  Nav 2). It sends zeros while the stick is centred, so the UI holds the base.
-- **Deadman:** hiding the tab, losing focus or losing the connection stops publishing,
-  and twist_mux's 0.5 s timeout stops the rover. Hiding the tab or a lost connection also drops
-  the page back to Neutral.
+- **Driving modes** (owned by `rover_drive_mode` in `rover-a1-orchestrator`, shared by every
+  browser; the rover boots in `ROVER_DRIVE_DEFAULT_MODE`, `assisted` by default):
+  - **Manual:** the joystick goes straight to the platform, no obstacle check.
+  - **Assisted:** the joystick goes through a lidar collision monitor that slows the rover
+    down and then stops it in front of an obstacle. With no lidar data it blocks all motion.
+  - **Automatic:** Nav 2 drives (**Go to**). Moving the joystick takes over: the rover
+    switches to Assisted and the mission is cancelled.
+  The joystick publishes `<ns>/teleop_web_cmd_vel_stamped` at 10 Hz; `rover_drive_mode`
+  routes it onto `<ns>/teleop_driver_interface_cmd_vel_stamped` (twist_mux priority 8). The RC
+  transmitter and the Foxglove joystick bypass the modes and always override.
+- **Joystick on/off:** per browser, the page starts with the joystick off and publishes
+  nothing. Hiding the tab, losing focus or losing the connection stops publishing and turns
+  it off again; twist_mux's timeout stops the rover.
 - **Gamepad:** a pad drives only while L1/LB is held.
 - **Other controls:** e-stop buttons call the `hardware_interface/sw_*` Trigger services.
 - **Top bar:** safety (e-stop, latch, `motion_lock`), diagnostics, battery and
   link latency (a round trip through `/rosapi/get_time`).
 - **Map view:** shows the occupancy map, the lidar scan, the Nav 2 plan and the rover. Tools:
   **Set pose** (AMCL `initialpose`) and **Go to** (`rover_mission_manager` `set_mission`), plus
-  **Stop**. These need `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`.
+  **Stop**. These need `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`,
+  and Go to needs the Automatic driving mode.
 - **Places and Facility** (indoor mode only, `ROVER_LOCALIZATION_SOURCE=indoor`):
   1. Record a map with **Start mapping**.
   2. **Save map as…** a name.
@@ -420,7 +428,9 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 |----------|---------|---------|--------|
 | `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. sshd and the web bridges still run (and the Zenoh router, in its own service). The orchestrator also stays idle, since there is no platform to drive. |
 | `ROVER_START_NAVIGATION` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
-| `ROVER_START_MISSION_MANAGER` | `false` | orchestrator | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. |
+| `ROVER_START_MISSION_MANAGER` | `false` | orchestrator | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. The Automatic driving mode is refused without it. |
+| `ROVER_START_DRIVE_MODE` | `true` | orchestrator | Starts `rover_drive_mode` (driving modes + the Assisted lidar guard), even when `ROVER_START_NAVIGATION=false`. `false` leaves the drive UI's joystick connected to nothing. Requires `ROVER_START_ROS_PLATFORM=true`. |
+| `ROVER_DRIVE_DEFAULT_MODE` | `assisted` | orchestrator | Driving mode at boot: `assisted` or `manual`. Never `automatic`. |
 | `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. It also idles when both `ROVER_USE_GPS` and `ROVER_USE_LIDAR` are false, since there is no driver to run. |
 
 ### Robot configuration
@@ -491,13 +501,20 @@ payload idle until `ROVER_START_NAVIGATION` / `ROVER_START_SENSORS` are set to `
 server, SLAM map autosaver) and `rover_mission_manager` (behavior-tree mission supervision
 dispatching Nav 2 actions).
 
-It starts that stack only when **both** hold:
+It also holds `rover_drive_mode`, the driving modes the drive UI switches between (Manual,
+Assisted, Automatic). That starts whenever `ROVER_START_ROS_PLATFORM` and
+`ROVER_START_DRIVE_MODE` (default `true`) are both true, independent of Nav 2, because the drive
+UI's joystick reaches the platform only through it. Nav 2 starts only when **both** hold:
 
 | `ROVER_START_ROS_PLATFORM` | `ROVER_START_NAVIGATION` | Result |
 |---|---|---|
 | `true` | `true` | Nav 2 starts (+ mission manager with `ROVER_START_MISSION_MANAGER=true`) |
-| *any* | `false` | idle — navigation not requested on this device (also the setting when a companion controller runs the stack) |
-| `false` | `true` | idle — no platform bringup to navigate with |
+| `true` | `false` | drive modes only — Manual and Assisted work, Automatic is refused. When a companion controller runs the stack, run `rover_drive_mode` on exactly one of the two devices (`ROVER_START_DRIVE_MODE=false` on the other): two managers would both route the joystick |
+| `false` | *any* | idle — no platform bringup to drive or navigate with |
+
+The table assumes `ROVER_START_DRIVE_MODE=true` (the default). With it `false`, the second row
+idles too, and the first runs Nav 2 without driving modes: the drive UI cannot drive, and the
+mission manager refuses every mission, because nothing ever reports AUTOMATIC.
 
 When idle the container does **not** exit — it sleeps, so `restart: always` cannot crash-loop
 it, and the balena logs carry a single line naming the reason. sshd starts ahead of that

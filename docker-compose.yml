@@ -16,7 +16,11 @@ version: '2.4'
 #                              services the web UIs call, "['.*']" = everything
 # ROVER_START_ROS_PLATFORM     platform: run rover_bringup (the only switch on by default)
 # ROVER_START_NAVIGATION       orchestrator: run Nav 2 (also needs ROVER_START_ROS_PLATFORM)
-# ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2
+# ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2 (needed for
+#                              the AUTOMATIC driving mode / GoTo)
+# ROVER_START_DRIVE_MODE       orchestrator: run rover_drive_mode (default true, independent of Nav 2):
+#                              routes the drive UI's joystick; off = the drive UI cannot drive
+# ROVER_DRIVE_DEFAULT_MODE     orchestrator: driving mode at boot, assisted (lidar slow/stop) | manual
 # ROVER_START_SENSORS          sensors: run the sensor payload drivers at all
 # ROVER_USE_GPS                sensors: GNSS driver; platform: GPS fusion;
 #                              orchestrator: Nav 2 localization_source gps vs odom
@@ -66,6 +70,8 @@ services:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
       ROVER_GPS_PUBLISH_MAP_TF: 'false'
@@ -148,6 +154,8 @@ services:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
       ROVER_GPS_PUBLISH_MAP_TF: 'false'
@@ -215,6 +223,8 @@ services:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
       ROVER_GPS_PUBLISH_MAP_TF: 'false'
@@ -274,6 +284,8 @@ services:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
       ROVER_GPS_PUBLISH_MAP_TF: 'false'
@@ -333,6 +345,8 @@ services:
 #       ROVER_START_ROS_PLATFORM: 'true'
 #       ROVER_START_NAVIGATION: 'false'
 #       ROVER_START_MISSION_MANAGER: 'false'
+#       ROVER_START_DRIVE_MODE: 'true'
+#       ROVER_DRIVE_DEFAULT_MODE: 'assisted'
 #       ROVER_START_SENSORS: 'false'
 #       ROVER_USE_GPS: 'false'
 #       ROVER_GPS_PUBLISH_MAP_TF: 'false'
@@ -397,6 +411,8 @@ services:
       ROVER_START_ROS_PLATFORM: 'true'
       ROVER_START_NAVIGATION: 'false'
       ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
       ROVER_START_SENSORS: 'false'
       ROVER_USE_GPS: 'false'
       ROVER_GPS_PUBLISH_MAP_TF: 'false'
