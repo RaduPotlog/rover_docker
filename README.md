@@ -152,13 +152,6 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
-> **Temporary branch defaults (driving modes).** On the `feature/drive-modes` branch of this repo,
-> the Dockerfiles default `ROVER_ROS_REF` (platform and orchestrator, kept equal),
-> `ROVER_ORCHESTRATOR_REF` and `ROVER_DRIVE_INTERFACE_REF` to `feature/drive-modes` instead of
-> `master`. Those branches carry the Manual / Assisted / Automatic driving modes
-> (`rover_drive_mode`). All three must exist on GitHub before a build. Set the defaults back to
-> `master` once they are merged.
-
 Select specific application commits instead of branch tips with:
 
 ```bash

@@ -103,10 +103,9 @@ WORKDIR /root/ros2_ws/rover_a1
 # rover_vda5050 carries everything VDA 5050: the InOrbit connector (third_party/, a git subtree)
 # and the rover's adapter and bringup. rover_ros is cloned only for rover_msgs (mission, drive
 # mode and safety messages); nothing else of it is built or rosdep-resolved.
-# TEMPORARY (feature/vda5050 / feature/drive-modes): set back to master once merged. Keep
-# ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator and here.
-ARG ROVER_ROS_REF=feature/drive-modes
-ARG ROVER_VDA5050_REF=feature/vda5050
+# Keep ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator and here.
+ARG ROVER_ROS_REF=master
+ARG ROVER_VDA5050_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN git clone https://github.com/RaduPotlog/rover_vda5050.git src/rover_vda5050 \
