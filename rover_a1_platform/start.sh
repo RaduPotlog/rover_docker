@@ -32,7 +32,40 @@ case "${ROVER_GPS_PUBLISH_MAP_TF:-false}" in
 esac
 export ROVER_GPS_PUBLISH_MAP_TF
 
+# Process groups of the `ros2 launch` jobs (each launch's PID: they run as jobs, see set -m below).
+LAUNCH_PGIDS=()
+
+# Stop the launched nodes themselves, not just `ros2 launch`: on SIGTERM launch exits at once and
+# orphans its nodes, and when this script (PID 1) exits the kernel SIGKILLs whatever is left, so
+# no node ever ran its shutdown code. SIGINT to each whole group is the signal every node here
+# handles cleanly (rclpy's SIGTERM path hangs under rmw_zenoh). Wait up to
+# LAUNCH_STOP_TIMEOUT_S for all of them together, then SIGKILL the stragglers.
+LAUNCH_STOP_TIMEOUT_S=5
+stop_launch_groups() {
+  local - pgid alive
+  set +x  # the polling below would flood the log
+  [ "${#LAUNCH_PGIDS[@]}" -gt 0 ] || return 0
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -INT -- "-$pgid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 $((LAUNCH_STOP_TIMEOUT_S * 10))); do
+    alive=false
+    for pgid in "${LAUNCH_PGIDS[@]}"; do
+      if kill -0 -- "-$pgid" 2>/dev/null; then
+        alive=true
+      fi
+    done
+    [ "$alive" = true ] || return 0
+    sleep 0.1
+  done
+  echo "Launched nodes still running after ${LAUNCH_STOP_TIMEOUT_S} s; killing them"
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+  done
+}
+
 terminate_children() {
+  stop_launch_groups
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
     wait "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -114,8 +147,11 @@ fi
 # workspace was compiled against, since LD_LIBRARY_PATH beats their RUNPATH.
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
+  set -m  # own process group, so stop_launch_groups can signal its nodes
   nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
   ROVER_PID=$!
+  set +m
+  LAUNCH_PGIDS+=("$ROVER_PID")
   CHILD_PIDS+=("$ROVER_PID")
   echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_USE_GPS=$ROVER_USE_GPS, ROVER_GPS_PUBLISH_MAP_TF=$ROVER_GPS_PUBLISH_MAP_TF)"
 else
@@ -132,8 +168,11 @@ sleep 2
 # - rosbridge websocket + rosapi (/rover_rosbridge_websocket, /rosapi) - kept only for
 #   ros-mcp-server to introspect and control the ROS graph.
 # rover_web_bridges.launch.py starts them under rover_-prefixed node names.
+set -m  # own process group, so stop_launch_groups can signal its nodes
 nohup ros2 launch rover_bringup rover_web_bridges.launch.py > /tmp/web_bridges.log 2>&1 < /dev/null &
 BRIDGES_PID=$!
+set +m
+LAUNCH_PGIDS+=("$BRIDGES_PID")
 CHILD_PIDS+=("$BRIDGES_PID")
 echo "Web bridges (foxglove_bridge, rosbridge) started (PID: $BRIDGES_PID)"
 

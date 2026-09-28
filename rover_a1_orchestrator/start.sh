@@ -4,7 +4,40 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
+# Process groups of the `ros2 launch` jobs (each launch's PID: they run as jobs, see set -m below).
+LAUNCH_PGIDS=()
+
+# Stop the launched nodes themselves, not just `ros2 launch`: on SIGTERM launch exits at once and
+# orphans its nodes, and when this script (PID 1) exits the kernel SIGKILLs whatever is left, so
+# no node ever ran its shutdown code. SIGINT to each whole group is the signal every node here
+# handles cleanly (rclpy's SIGTERM path hangs under rmw_zenoh). Wait up to
+# LAUNCH_STOP_TIMEOUT_S for all of them together, then SIGKILL the stragglers.
+LAUNCH_STOP_TIMEOUT_S=5
+stop_launch_groups() {
+  local - pgid alive
+  set +x  # the polling below would flood the log
+  [ "${#LAUNCH_PGIDS[@]}" -gt 0 ] || return 0
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -INT -- "-$pgid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 $((LAUNCH_STOP_TIMEOUT_S * 10))); do
+    alive=false
+    for pgid in "${LAUNCH_PGIDS[@]}"; do
+      if kill -0 -- "-$pgid" 2>/dev/null; then
+        alive=true
+      fi
+    done
+    [ "$alive" = true ] || return 0
+    sleep 0.1
+  done
+  echo "Launched nodes still running after ${LAUNCH_STOP_TIMEOUT_S} s; killing them"
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+  done
+}
+
 terminate_children() {
+  stop_launch_groups
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
     wait "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -154,12 +187,15 @@ ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
 
 # **Drive modes - Background** (before the Nav 2 gate: MANUAL and ASSISTED need no Nav 2).
 if [ "$START_DRIVE_MODE" = true ]; then
+  set -m  # own process group, so stop_launch_groups can signal its nodes
   nohup ros2 launch rover_drive_mode rover_drive_mode.launch.py \
     use_sim_time:="${ROVER_USE_SIM_TIME}" \
     namespace:="${ROVER_NAMESPACE}" \
     default_mode:="${ROVER_DRIVE_DEFAULT_MODE}" \
     > /tmp/rover_drive_mode.log 2>&1 < /dev/null &
   DRIVE_MODE_PID=$!
+  set +m
+  LAUNCH_PGIDS+=("$DRIVE_MODE_PID")
   CHILD_PIDS+=("$DRIVE_MODE_PID")
   echo "Drive modes started in background (PID: $DRIVE_MODE_PID, boot mode: $ROVER_DRIVE_DEFAULT_MODE)"
 fi
@@ -240,6 +276,7 @@ esac
 # namespace and localization_source are passed explicitly even though both launch files read
 # ROVER_NAMESPACE themselves: rover_mission_manager must be launched with the same
 # localization_source as rover_navigation, and passing both proves they agree.
+set -m  # own process group, so stop_launch_groups can signal its nodes
 nohup ros2 launch rover_navigation bringup.launch.py \
   use_sim_time:="${ROVER_USE_SIM_TIME}" \
   namespace:="${ROVER_NAMESPACE}" \
@@ -247,17 +284,22 @@ nohup ros2 launch rover_navigation bringup.launch.py \
   map:="${ROVER_NAV_MAP}" \
   > /tmp/rover_nav.log 2>&1 < /dev/null &
 NAV_PID=$!
+set +m
+LAUNCH_PGIDS+=("$NAV_PID")
 CHILD_PIDS+=("$NAV_PID")
 echo "Nav 2 bringup started in background (PID: $NAV_PID, localization_source=$LOCALIZATION_SOURCE, map=$ROVER_NAV_MAP)"
 
 # **Mission manager - Background**
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
+  set -m  # own process group, so stop_launch_groups can signal its nodes
   nohup ros2 launch rover_mission_manager rover_mission_manager.launch.py \
     use_sim_time:="${ROVER_USE_SIM_TIME}" \
     namespace:="${ROVER_NAMESPACE}" \
     localization_source:="${LOCALIZATION_SOURCE}" \
     > /tmp/rover_mission_manager.log 2>&1 < /dev/null &
   MISSION_PID=$!
+  set +m
+  LAUNCH_PGIDS+=("$MISSION_PID")
   CHILD_PIDS+=("$MISSION_PID")
   echo "Mission manager started in background (PID: $MISSION_PID)"
 else

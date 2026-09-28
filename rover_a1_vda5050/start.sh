@@ -4,27 +4,40 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
-# Process group of the VDA 5050 launch (its PID; it runs as a job, see below). Empty until then.
-VDA5050_PGID=""
+# Process groups of the `ros2 launch` jobs (each launch's PID: they run as jobs, see set -m below).
+LAUNCH_PGIDS=()
 
-# Stop the connector's nodes themselves, not just `ros2 launch`: on SIGTERM launch exits at once
-# and orphans them, and when this script (PID 1) exits the kernel SIGKILLs whatever is left - so
-# mqtt_bridge never announced OFFLINE and the broker kept the retained ONLINE. SIGINT to the
-# whole group is the signal every node here handles cleanly (rclpy's SIGTERM path hangs under
-# rmw_zenoh). Give them up to 5 s (mqtt_bridge waits at most 2 s for the broker), then SIGKILL.
-stop_vda5050_group() {
-  [ -n "$VDA5050_PGID" ] || return 0
-  kill -INT -- "-$VDA5050_PGID" 2>/dev/null || return 0
-  for _ in $(seq 1 50); do
-    kill -0 -- "-$VDA5050_PGID" 2>/dev/null || return 0
+# Stop the launched nodes themselves, not just `ros2 launch`: on SIGTERM launch exits at once and
+# orphans its nodes, and when this script (PID 1) exits the kernel SIGKILLs whatever is left, so
+# no node ever ran its shutdown code. SIGINT to each whole group is the signal every node here
+# handles cleanly (rclpy's SIGTERM path hangs under rmw_zenoh). Wait up to
+# LAUNCH_STOP_TIMEOUT_S for all of them together, then SIGKILL the stragglers.
+LAUNCH_STOP_TIMEOUT_S=5
+stop_launch_groups() {
+  local - pgid alive
+  set +x  # the polling below would flood the log
+  [ "${#LAUNCH_PGIDS[@]}" -gt 0 ] || return 0
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -INT -- "-$pgid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 $((LAUNCH_STOP_TIMEOUT_S * 10))); do
+    alive=false
+    for pgid in "${LAUNCH_PGIDS[@]}"; do
+      if kill -0 -- "-$pgid" 2>/dev/null; then
+        alive=true
+      fi
+    done
+    [ "$alive" = true ] || return 0
     sleep 0.1
   done
-  echo "VDA 5050 nodes still running after 5 s; killing them"
-  kill -KILL -- "-$VDA5050_PGID" 2>/dev/null || true
+  echo "Launched nodes still running after ${LAUNCH_STOP_TIMEOUT_S} s; killing them"
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+  done
 }
 
 terminate_children() {
-  stop_vda5050_group
+  stop_launch_groups
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
     wait "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -166,13 +179,13 @@ fi
 # Not traced: the password would land in the balena logs.
 set +x
 # As a job (set -m), so the launch and its nodes get their own process group (PGID = its PID)
-# that stop_vda5050_group can signal as a whole, and SIGINT is not ignored in them.
+# that stop_launch_groups can signal as a whole, and SIGINT is not ignored in them.
 set -m
 nohup ros2 launch rover_vda5050_bringup vda5050.launch.py "${LAUNCH_ARGS[@]}" \
   > /tmp/rover_vda5050.log 2>&1 < /dev/null &
 VDA5050_PID=$!
 set +m
-VDA5050_PGID=$VDA5050_PID
+LAUNCH_PGIDS+=("$VDA5050_PID")
 set -x
 CHILD_PIDS+=("$VDA5050_PID")
 echo "VDA 5050 connector started in background (PID: $VDA5050_PID, broker ${BROKER_HOST}:${BROKER_PORT}, frame ${MAP_FRAME})"

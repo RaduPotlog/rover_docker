@@ -4,7 +4,40 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
+# Process groups of the `ros2 launch` jobs (each launch's PID: they run as jobs, see set -m below).
+LAUNCH_PGIDS=()
+
+# Stop the launched nodes themselves, not just `ros2 launch`: on SIGTERM launch exits at once and
+# orphans its nodes, and when this script (PID 1) exits the kernel SIGKILLs whatever is left, so
+# no node ever ran its shutdown code. SIGINT to each whole group is the signal every node here
+# handles cleanly (rclpy's SIGTERM path hangs under rmw_zenoh). Wait up to
+# LAUNCH_STOP_TIMEOUT_S for all of them together, then SIGKILL the stragglers.
+LAUNCH_STOP_TIMEOUT_S=5
+stop_launch_groups() {
+  local - pgid alive
+  set +x  # the polling below would flood the log
+  [ "${#LAUNCH_PGIDS[@]}" -gt 0 ] || return 0
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -INT -- "-$pgid" 2>/dev/null || true
+  done
+  for _ in $(seq 1 $((LAUNCH_STOP_TIMEOUT_S * 10))); do
+    alive=false
+    for pgid in "${LAUNCH_PGIDS[@]}"; do
+      if kill -0 -- "-$pgid" 2>/dev/null; then
+        alive=true
+      fi
+    done
+    [ "$alive" = true ] || return 0
+    sleep 0.1
+  done
+  echo "Launched nodes still running after ${LAUNCH_STOP_TIMEOUT_S} s; killing them"
+  for pgid in "${LAUNCH_PGIDS[@]}"; do
+    kill -KILL -- "-$pgid" 2>/dev/null || true
+  done
+}
+
 terminate_children() {
+  stop_launch_groups
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
     wait "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -116,12 +149,15 @@ fi
 ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
 
 # **Sensor drivers - Background**
+set -m  # own process group, so stop_launch_groups can signal its nodes
 nohup ros2 launch rover_sensors_bringup rover_sensors.launch.py \
   namespace:="${ROVER_NAMESPACE}" \
   use_gps:="${ROVER_USE_GPS}" \
   use_lidar:="${ROVER_USE_LIDAR}" \
   > /tmp/rover_sensors.log 2>&1 < /dev/null &
 SENSORS_PID=$!
+set +m
+LAUNCH_PGIDS+=("$SENSORS_PID")
 CHILD_PIDS+=("$SENSORS_PID")
 echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR)"
 
