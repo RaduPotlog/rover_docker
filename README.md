@@ -16,6 +16,7 @@ service's build context in `docker-compose.yml`:
 | `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices), plus an sshd on port 26 and the Claude Code CLI with `ros-mcp` registered |
 | `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25 and the Claude Code CLI with `ros-mcp` registered. See [Drive interface](#drive-interface) |
+| `rover-a1-vda5050` | `rover_a1_vda5050/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_vda5050`](https://github.com/RaduPotlog/rover_vda5050) — the VDA 5050 2.0 fleet interface (InOrbit's MQTT connector, vendored, driving the rover through `rover_mission_manager`), an optional Mosquitto broker (1883, WebSockets 9001), plus an sshd on port 27 and the Claude Code CLI with `ros-mcp` registered. Idle unless enabled, see [VDA 5050](#vda-5050) |
 
 ```
 rover_docker/
@@ -198,17 +199,21 @@ All containers use host networking, so these bind directly to the device:
 | 24     | sshd (`rover-a1-orchestrator`)       |
 | 25     | sshd (`rover-a1-drive-interface`)    |
 | 26     | sshd (`rover-cockpit`)               |
+| 27     | sshd (`rover-a1-vda5050`)            |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
+| 1883   | MQTT, VDA 5050 (`rover-a1-vda5050`'s Mosquitto, with `ROVER_VDA5050_LOCAL_BROKER=true`; anonymous, LAN only) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 7447   | Zenoh router (`rover-a1-zenoh-router`; loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
+| 9001   | MQTT over WebSockets (`rover-a1-vda5050`'s Mosquitto), for browser tools such as vda5050_visualizer |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **every** container |
 | 10110/udp | RUTX11 NMEA forwarding → GNSS driver (`rover-a1-sensors`) |
 | 6699/udp, 7788/udp | RoboSense RS16 MSOP / DIFOP → lidar driver (`rover-a1-sensors`) |
 | 48484  | balena supervisor              |
 
 Host networking gives every container a single port space, so each sshd has its own port —
-platform **22**, sensors **23**, orchestrator **24**, drive-interface **25**, cockpit **26**.
+platform **22**, sensors **23**, orchestrator **24**, drive-interface **25**, cockpit **26**,
+vda5050 **27**.
 No ROS container runs a Zenoh router of its own: they all join `rover-a1-zenoh-router` on 7447 (see
 [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
 
@@ -440,6 +445,19 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | `ROVER_DRIVE_DEFAULT_MODE` | `assisted` | orchestrator | Driving mode at boot: `assisted` or `manual`. Never `automatic`. |
 | `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. It also idles when both `ROVER_USE_GPS` and `ROVER_USE_LIDAR` are false, since there is no driver to run. |
 
+### VDA 5050
+
+| Variable | Default | Read by | Effect |
+|----------|---------|---------|--------|
+| `ROVER_START_VDA5050` | `false` | vda5050 | `true` starts the VDA 5050 connector. Orders drive through `rover_mission_manager`, so they also need `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true` on the orchestrator, and the rover in the Automatic driving mode. |
+| `ROVER_VDA5050_LOCAL_BROKER` | `true` | vda5050 | Run Mosquitto in the container (1883, WebSockets 9001, anonymous). `false` when master control brings its own broker. |
+| `ROVER_VDA5050_BROKER_HOST` / `_PORT` | `127.0.0.1` / `1883` | vda5050 | The broker the connector uses. |
+| `ROVER_VDA5050_BROKER_USER` / `_PASSWORD` | unset | vda5050 | Broker login. A user also switches the connector to TLS (CA bundle from `VDA5050_CONNECTOR_TLS_CA_CERT`, default the system bundle). |
+| `ROVER_VDA5050_MANUFACTURER` / `_SERIAL_NUMBER` | `MechatronicsAcademy` / `rover_a1` | vda5050 | VDA 5050 identity; topics are `uagv/v2/<manufacturer>/<serial>/…`. |
+| `ROVER_VDA5050_MAP_FRAME` | unset | vda5050 | Nav 2 frame the order coordinates are in (prefixed with the namespace). Unset follows the orchestrator's localization source like its `start.sh` does: `odom` for odom, `map` for gps/slam/amcl/indoor. |
+
+See [VDA 5050](#vda-5050) for what the interface supports.
+
 ### Robot configuration
 
 | Variable | Default | Read by | Effect |
@@ -537,6 +555,25 @@ The container runs no Zenoh router of its own: host networking puts it in the sa
 namespace as `rover-a1-zenoh-router`, so `rmw_zenoh_cpp` connects to `tcp/127.0.0.1:7447`.
 `start.sh` waits up to 60 s for that port before launching (`depends_on` orders the start, but
 not readiness).
+
+## VDA 5050
+
+`rover-a1-vda5050` connects Rover A1 to a VDA 5050 **2.0** master control over MQTT. The code lives
+in [`rover_vda5050`](https://github.com/RaduPotlog/rover_vda5050): InOrbit's open-source
+connector ([`ros_amr_interop`](https://github.com/inorbit-ai/ros_amr_interop), vendored as a git
+subtree with a short list of patches) plus the rover's adapter plugins. Orders become
+`rover_mission_manager` missions, so every guard GoTo has applies to them too: the Automatic
+driving mode, the motion lock, a dead lidar, low battery. See that repository's README for the
+supported actions, the state mapping and how to test with its `fake_master.py`.
+
+Enable it with `ROVER_START_VDA5050=true` on a rover that also runs
+`ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`, then put the rover in
+Automatic from the drive UI. Master control publishes to `uagv/v2/<manufacturer>/<serial>/order`
+on the rover's broker (port 1883), or on its own broker with `ROVER_VDA5050_LOCAL_BROKER=false` and
+`ROVER_VDA5050_BROKER_HOST`. SSH: `ssh -p 27 root@<rover-lan-ip>`; the connector logs to
+`/tmp/rover_vda5050.log`, Mosquitto to `/tmp/rover_mosquitto.log`.
+
+The rover's broker is anonymous and unencrypted: fine on the rover LAN, not beyond it.
 
 ## ROS namespace
 

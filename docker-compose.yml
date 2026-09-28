@@ -42,6 +42,12 @@ version: '2.4'
 #                              rim-speed limit + track width (keep equal to rover_crsf_teleop.yaml),
 #                              stick expo per axis (0 linear .. 1 softest);
 #                              no password = nginx is not started (the container idles, sshd on 25 only)
+# ROVER_START_VDA5050          vda5050: run the VDA 5050 fleet interface (default false; orders need
+#                              ROVER_START_MISSION_MANAGER=true on the orchestrator)
+# ROVER_VDA5050_*              vda5050: local Mosquitto on/off, broker host/port/user/password (a user
+#                              also enables TLS), manufacturer + serial number (MQTT topic levels),
+#                              Nav 2 frame of the order coordinates (unset = odom or map, following
+#                              the orchestrator's localization source)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (its own
 # service, rover-a1-zenoh-router, so it keeps running while the others restart), and the sensors
@@ -114,6 +120,15 @@ services:
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
       ROVER_DRIVE_EXPO_LINEAR: '0.3'
       ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
     healthcheck:
       # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here, see rover-cockpit.
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
@@ -198,6 +213,15 @@ services:
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
       ROVER_DRIVE_EXPO_LINEAR: '0.3'
       ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
@@ -267,6 +291,15 @@ services:
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
       ROVER_DRIVE_EXPO_LINEAR: '0.3'
       ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -328,6 +361,15 @@ services:
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
       ROVER_DRIVE_EXPO_LINEAR: '0.3'
       ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
 # rover-cockpit disabled: not built/deployed for now. Uncomment to restore.
 #   rover-cockpit:
 #     build:
@@ -389,6 +431,15 @@ services:
 #       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
 #       ROVER_DRIVE_EXPO_LINEAR: '0.3'
 #       ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+#       ROVER_START_VDA5050: 'false'
+#       ROVER_VDA5050_LOCAL_BROKER: 'true'
+#       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+#       ROVER_VDA5050_BROKER_PORT: '1883'
+#       ROVER_VDA5050_BROKER_USER:
+#       ROVER_VDA5050_BROKER_PASSWORD:
+#       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+#       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+#       ROVER_VDA5050_MAP_FRAME:
 #     healthcheck:
 #       # A script in the image reads ROVER_COCKPIT_PORT at run time. No `$` here: balena's
 #       # compose parser mangles `$$`, which made this check fail forever and restart cockpit.
@@ -455,12 +506,172 @@ services:
       ROVER_DRIVE_TRACK_WIDTH: '1.0204'
       ROVER_DRIVE_EXPO_LINEAR: '0.3'
       ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
     healthcheck:
       # Script in the image (reads ROVER_DRIVE_PORT); no `$` here, see rover-cockpit.
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
       start_period: 10s
+      retries: 3
+
+  # VDA 5050 fleet interface: InOrbit's connector + rover_vda5050_adapter (rover_vda5050), driving
+  # through rover_mission_manager in rover-a1-orchestrator. Idle unless ROVER_START_VDA5050=true.
+  # Runs its own Mosquitto (1883, WebSockets 9001) with ROVER_VDA5050_LOCAL_BROKER=true; sshd on 27.
+  rover-a1-vda5050:
+    build:
+      context: ./rover_a1_vda5050
+    # Start order only; start.sh still waits until the router accepts connections.
+    depends_on:
+      - rover-a1-zenoh-router
+    restart: always
+    network_mode: host
+    environment:
+      ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_START_ROS_PLATFORM: 'true'
+      ROVER_START_NAVIGATION: 'false'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_START_SENSORS: 'false'
+      ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
+      ROVER_USE_LIDAR: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
+      ROVER_GPS_LOCALIZATION_X:
+      ROVER_GPS_LOCALIZATION_Y:
+      ROVER_GPS_LOCALIZATION_Z:
+      ROVER_GPS_ORIENTATION_R:
+      ROVER_GPS_ORIENTATION_P:
+      ROVER_GPS_ORIENTATION_Y:
+      ROVER_IMU_LOCALIZATION_X:
+      ROVER_IMU_LOCALIZATION_Y:
+      ROVER_IMU_LOCALIZATION_Z:
+      ROVER_IMU_ORIENTATION_R:
+      ROVER_IMU_ORIENTATION_P:
+      ROVER_IMU_ORIENTATION_Y:
+      ROVER_LIDAR_LOCALIZATION_X:
+      ROVER_LIDAR_LOCALIZATION_Y:
+      ROVER_LIDAR_LOCALIZATION_Z:
+      ROVER_LIDAR_ORIENTATION_R:
+      ROVER_LIDAR_ORIENTATION_P:
+      ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_COCKPIT_PORT: '80'
+      ROVER_COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
+      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
+      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
+  rover-a1-sensors:
+    build:
+      context: ./rover_a1_sensors
+    # Start order only; start.sh still waits until the router accepts connections.
+    depends_on:
+      - rover-a1-zenoh-router
+    restart: always
+    # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
+    network_mode: host
+    environment:
+      ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_START_ROS_PLATFORM: 'true'
+      ROVER_START_NAVIGATION: 'false'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_START_SENSORS: 'false'
+      ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
+      ROVER_USE_LIDAR: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
+      ROVER_GPS_LOCALIZATION_X:
+      ROVER_GPS_LOCALIZATION_Y:
+      ROVER_GPS_LOCALIZATION_Z:
+      ROVER_GPS_ORIENTATION_R:
+      ROVER_GPS_ORIENTATION_P:
+      ROVER_GPS_ORIENTATION_Y:
+      ROVER_IMU_LOCALIZATION_X:
+      ROVER_IMU_LOCALIZATION_Y:
+      ROVER_IMU_LOCALIZATION_Z:
+      ROVER_IMU_ORIENTATION_R:
+      ROVER_IMU_ORIENTATION_P:
+      ROVER_IMU_ORIENTATION_Y:
+      ROVER_LIDAR_LOCALIZATION_X:
+      ROVER_LIDAR_LOCALIZATION_Y:
+      ROVER_LIDAR_LOCALIZATION_Z:
+      ROVER_LIDAR_ORIENTATION_R:
+      ROVER_LIDAR_ORIENTATION_P:
+      ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_COCKPIT_PORT: '80'
+      ROVER_COCKPIT_USER: 'rover'
+      ROVER_COCKPIT_PASSWORD:
+      ROVER_COCKPIT_DEBUG: 'false'
+      ROVER_COCKPIT_ORIGINS:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
+      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
+      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
+    healthcheck:
+      # Script in the image (TCP connect to the local broker when there is one); no `$` here,
+      # see rover-cockpit.
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
       retries: 3
 
 volumes:
