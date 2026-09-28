@@ -196,6 +196,7 @@ All containers use host networking, so these bind directly to the device:
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 1883   | MQTT, VDA 5050 (`rover-a1-vda5050`'s Mosquitto, with `ROVER_VDA5050_LOCAL_BROKER=true`; anonymous, LAN only) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
+| 5080   | Network page: switch the router's Wi-Fi uplink (`rover-a1-network`, plain http, basic-auth login) |
 | 7447   | Zenoh router (`rover-a1-zenoh-router`; loopback + rover LAN only, see below) |
 | 8765   | foxglove_bridge                |
 | 9001   | MQTT over WebSockets (`rover-a1-vda5050`'s Mosquitto), for browser tools such as vda5050_visualizer |
@@ -416,6 +417,84 @@ Limitations:
   interface is reachable on the rover LAN only.
 - A page served over https would need `wss`; nginx already builds the websocket URL from the
   page scheme, so a TLS proxy in front of port 5000 works unchanged.
+
+## Network uplink page
+
+`rover-a1-network` serves `http://<rover-lan-ip>:5080/`. The page switches the internet uplink
+of the RUTX11 router (its Wi-Fi client, logical interface `wan1`) to another network and keeps
+the router's rules intact, so the wired LAN (`lan`, 192.168.1.0/24) and the rover AP (`WWAN`,
+192.168.77.0/24) keep internet.
+
+**Why it exists.** Joining a network through RutOS *Wireless → Scan → Join* creates a **new**
+STA interface (`wan2`, …). No firewall zone lists that interface, so there is no MASQUERADE,
+and LAN / AP clients lose internet even though the router itself is online. Sometimes the new
+interface also lands in the `lan` zone, which exposes the router's SSH and web UI to the foreign
+network. This page never creates an interface. It rewrites the SSID, key and encryption of the
+existing `wan1` Wi-Fi client, so the zones, forwarding and NAT that reference `wan1` stay valid.
+
+- **Connect:** press **Scan**, pick a network, enter its password and press **Connect**.
+  Use **Hidden network…** to type an SSID by hand. WEP and 802.1X / enterprise networks
+  are not supported.
+- **Health check:** the page checks every invariant and shows the exact `uci` commands
+  **Repair** would run:
+  - `wan1` is the only Wi-Fi client, and it is enabled.
+  - Zone `wwan` lists `wan1`, with `masq=1`, `mtu_fix=1` and no `input ACCEPT`.
+  - `wan1` is in no other zone.
+  - Zone `lan` lists exactly `lan WWAN`, with `masq=0`.
+  - A `lan → wwan` forwarding exists.
+  - No forwarding or mwan3 entry points at a zone or interface that no longer exists.
+  - Live: associated, has an IPv4 address, the router pings 1.1.1.1 through the uplink, and
+    fw3 has MASQUERADE on the uplink device.
+- **Extra interfaces:** an extra Wi-Fi client left behind by a RutOS *Join* gets two
+  buttons.
+  - **Use it as the uplink:** moves its SSID and key into `wan1`, then deletes it together with
+    its network, zone and mwan3 entries.
+  - **Delete:** removes it and keeps the current uplink.
+- **Rollback:** every change is one transaction.
+  1. The router's `wireless network firewall mwan3` configs are copied to
+     `/etc/netui-backup/<time>/` (the last 5 are kept).
+  2. A rollback is armed **on the router**: a detached timer that restores the copy after
+     180 s.
+  3. The change is applied and verified. For a switch, verification means associated, an
+     address, internet and NAT, within 75 s.
+  4. On success the rollback is disarmed. On failure (wrong password, out of range, no DHCP)
+     the previous configuration is restored at once.
+
+  If the controller or this container dies mid-switch, the router still restores itself when
+  the timer expires. The rover's own LAN and AP are never touched, so the page stays
+  reachable throughout. Each finished job, already redacted, is appended to `/data/jobs.log`
+  (volume `rover-network`).
+- **Uncommitted changes:** if someone has changes staged in the RutOS web UI (`uci changes`
+  is not empty), the page refuses to switch until they are saved or discarded there.
+
+The page talks to the router over SSH (`root@192.168.1.1`, password auth via paramiko). It pins
+the router's host key on first use in `/data/known_hosts`; if the router is replaced, delete
+that file. The Wi-Fi key only travels inside `uci batch` stdin, and it never appears in logs,
+job output or API responses. POSTs require an `X-Requested-With: netui` header, so another
+website can't reuse a browser's cached login.
+
+Set the two passwords as **service** variables of `rover-a1-network`. Don't set them
+fleet-wide, or every container would see the router's root password:
+
+```bash
+balena env set RUTX11_PASSWORD '<router root password>' --device <uuid> --service rover-a1-network
+balena env set NETUI_PASSWORD '<page password>' --device <uuid> --service rover-a1-network
+```
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ROVER_NETWORK_ENABLE` | `true` | `false` = the container idles. |
+| `NETUI_PORT` / `NETUI_USER` | `5080` / `rover` | Port and login user of the page. |
+| `NETUI_PASSWORD` | *(unset)* | Required; without it the container idles and logs an error. |
+| `RUTX11_HOST` / `RUTX11_USER` / `RUTX11_PASSWORD` | `192.168.1.1` / `root` / *(unset)* | Router SSH login; the password is required (same names as `rover_gps`'s `rutx11_gps_nmea_forwarding.sh`). |
+| `UPLINK_IFACE` | `wan1` | Logical network name of the Wi-Fi uplink. Use the uci name, not the RutOS display name (`WWAN1`). |
+| `UPLINK_ZONE` / `LAN_ZONE` | `wwan` / `lan` | Firewall zone that masquerades out of the uplink, and the zone of the client networks. |
+| `CLIENT_NETS` | `lan WWAN` | Networks that must reach the internet (wired LAN + rover AP). |
+
+The container runs no sshd. The service runs as an unprivileged user; its tests run during
+`docker build`, so a failing test fails the push. Run them locally with
+`cd rover_a1_network && python -m pytest`, which needs `requirements.txt` +
+`requirements-test.txt`.
 
 ## Device variables
 

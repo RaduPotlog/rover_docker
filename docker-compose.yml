@@ -604,9 +604,43 @@ services:
       start_period: 30s
       retries: 3
 
+  # Wi-Fi uplink page: switches the RUTX11's Wi-Fi client (wan1) to another network IN PLACE and
+  # keeps firewall zones / NAT / forwarding consistent, so the wired LAN and the rover AP keep
+  # internet. Talks to the router over SSH; changes are rolled back by the router itself if the
+  # new uplink does not come up. No ROS, no sshd. Idles without NETUI_PASSWORD / RUTX11_PASSWORD.
+  rover-a1-network:
+    build:
+      context: ./rover_a1_network
+    restart: always
+    network_mode: host
+    volumes:
+      - rover-network:/data
+    environment:
+      ROVER_NETWORK_ENABLE: 'true'
+      NETUI_PORT: '5080'
+      NETUI_USER: 'rover'
+      # Set both as service variables of rover-a1-network, not fleet-wide (see README).
+      NETUI_PASSWORD:
+      RUTX11_PASSWORD:
+      RUTX11_HOST: '192.168.1.1'
+      RUTX11_USER: 'root'
+      UPLINK_IFACE: 'wan1'
+      UPLINK_ZONE: 'wwan'
+      LAN_ZONE: 'lan'
+      CLIENT_NETS: 'lan WWAN'
+    healthcheck:
+      # Script in the image (reads NETUI_PORT); no `$` here, see rover-cockpit.
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
 volumes:
   # Persists the SLAM map across container restarts for localization_source=amcl.
   rover-maps:
   # Persists the measured RC stick calibration. Only rover-a1-platform needs it: the Cockpit page
   # reaches the calibration through the node's rc/calibration services, never by reading the file.
   rover-config:
+  # Router host key (pinned on first use) and the log of uplink changes (rover-a1-network).
+  rover-network:
