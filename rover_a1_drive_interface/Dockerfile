@@ -10,7 +10,9 @@ RUN apt-get update \
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_DRIVE_INTERFACE_REF=<sha>` for a reproducible build instead.
 # Same convention as ROVER_COCKPIT_REF / ROVER_ROS_REF in the other services.
-ARG ROVER_DRIVE_INTERFACE_REF=master
+# TEMPORARY (feature/drive-modes): tracks the driving-modes branch instead of master. Set
+# back to master once that branch is merged.
+ARG ROVER_DRIVE_INTERFACE_REF=feature/drive-modes
 RUN git clone https://github.com/RaduPotlog/rover_drive_interface.git /src \
     && git -C /src checkout ${ROVER_DRIVE_INTERFACE_REF}
 
