@@ -123,17 +123,32 @@ if [ "$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" false)" != true ]; then
 fi
 
 # **VDA 5050 connector - Background**
-nohup ros2 launch rover_vda5050_bringup vda5050.launch.py \
-  namespace:="${ROVER_NAMESPACE:-}" \
-  broker_host:="${BROKER_HOST}" \
-  broker_port:="${BROKER_PORT}" \
-  broker_username:="${ROVER_VDA5050_BROKER_USER:-}" \
-  broker_password:="${ROVER_VDA5050_BROKER_PASSWORD:-}" \
-  manufacturer:="${ROVER_VDA5050_MANUFACTURER:-MechatronicsAcademy}" \
-  serial_number:="${ROVER_VDA5050_SERIAL_NUMBER:-rover_a1}" \
-  map_frame:="${MAP_FRAME}" \
+# Optional arguments go in only when set: `ros2 launch` rejects an empty `name:=` ("malformed
+# launch argument") and exits at once, which crash-looped this service with the anonymous local
+# broker (no user/password). The launch file defaults each of them to the empty string.
+LAUNCH_ARGS=(
+  broker_host:="${BROKER_HOST}"
+  broker_port:="${BROKER_PORT}"
+  manufacturer:="${ROVER_VDA5050_MANUFACTURER:-MechatronicsAcademy}"
+  serial_number:="${ROVER_VDA5050_SERIAL_NUMBER:-rover_a1}"
+  map_frame:="${MAP_FRAME}"
+)
+# Unset or empty = unnamespaced; the launch file then reads ROVER_NAMESPACE itself.
+if [ -n "${ROVER_NAMESPACE:-}" ]; then
+  LAUNCH_ARGS+=(namespace:="${ROVER_NAMESPACE}")
+fi
+if [ -n "${ROVER_VDA5050_BROKER_USER:-}" ]; then
+  LAUNCH_ARGS+=(broker_username:="${ROVER_VDA5050_BROKER_USER}")
+fi
+if [ -n "${ROVER_VDA5050_BROKER_PASSWORD:-}" ]; then
+  LAUNCH_ARGS+=(broker_password:="${ROVER_VDA5050_BROKER_PASSWORD}")
+fi
+# Not traced: the password would land in the balena logs.
+set +x
+nohup ros2 launch rover_vda5050_bringup vda5050.launch.py "${LAUNCH_ARGS[@]}" \
   > /tmp/rover_vda5050.log 2>&1 < /dev/null &
 VDA5050_PID=$!
+set -x
 CHILD_PIDS+=("$VDA5050_PID")
 echo "VDA 5050 connector started in background (PID: $VDA5050_PID, broker ${BROKER_HOST}:${BROKER_PORT}, frame ${MAP_FRAME})"
 
@@ -143,16 +158,23 @@ echo "VDA 5050 connector started in background (PID: $VDA5050_PID, broker ${BROK
 EXIT_CODE=0
 wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
-STATUS_ENTRIES=("sshd:$SSHD_PID" "rover_vda5050:$VDA5050_PID")
+# name:pid:log - the log is what the process wrote before dying, which otherwise vanishes with the
+# container (this service restarts before anyone can SSH in to read it).
+STATUS_ENTRIES=("sshd:$SSHD_PID:" "rover_vda5050:$VDA5050_PID:/tmp/rover_vda5050.log")
 if [ "$ROVER_VDA5050_LOCAL_BROKER" = true ]; then
-  STATUS_ENTRIES+=("mosquitto:$MOSQUITTO_PID")
+  STATUS_ENTRIES+=("mosquitto:$MOSQUITTO_PID:/tmp/rover_mosquitto.log")
 fi
 
+set +x  # the log tail is the point; the trace would only bury it
 for entry in "${STATUS_ENTRIES[@]}"; do
-  name=${entry%%:*}
-  pid=${entry##*:}
+  IFS=: read -r name pid log <<< "$entry"
   if ! kill -0 "$pid" 2>/dev/null; then
     echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+    if [ -n "$log" ] && [ -s "$log" ]; then
+      echo "----- last lines of $log -----"
+      tail -n 60 "$log"
+      echo "----- end of $log -----"
+    fi
   fi
 done
 
