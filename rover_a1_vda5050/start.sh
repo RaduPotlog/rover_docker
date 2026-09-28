@@ -4,7 +4,27 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
+# Process group of the VDA 5050 launch (its PID; it runs as a job, see below). Empty until then.
+VDA5050_PGID=""
+
+# Stop the connector's nodes themselves, not just `ros2 launch`: on SIGTERM launch exits at once
+# and orphans them, and when this script (PID 1) exits the kernel SIGKILLs whatever is left - so
+# mqtt_bridge never announced OFFLINE and the broker kept the retained ONLINE. SIGINT to the
+# whole group is the signal every node here handles cleanly (rclpy's SIGTERM path hangs under
+# rmw_zenoh). Give them up to 5 s (mqtt_bridge waits at most 2 s for the broker), then SIGKILL.
+stop_vda5050_group() {
+  [ -n "$VDA5050_PGID" ] || return 0
+  kill -INT -- "-$VDA5050_PGID" 2>/dev/null || return 0
+  for _ in $(seq 1 50); do
+    kill -0 -- "-$VDA5050_PGID" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  echo "VDA 5050 nodes still running after 5 s; killing them"
+  kill -KILL -- "-$VDA5050_PGID" 2>/dev/null || true
+}
+
 terminate_children() {
+  stop_vda5050_group
   if [ "${#CHILD_PIDS[@]}" -gt 0 ]; then
     kill -TERM "${CHILD_PIDS[@]}" 2>/dev/null || true
     wait "${CHILD_PIDS[@]}" 2>/dev/null || true
@@ -145,9 +165,14 @@ if [ -n "${ROVER_VDA5050_BROKER_PASSWORD:-}" ]; then
 fi
 # Not traced: the password would land in the balena logs.
 set +x
+# As a job (set -m), so the launch and its nodes get their own process group (PGID = its PID)
+# that stop_vda5050_group can signal as a whole, and SIGINT is not ignored in them.
+set -m
 nohup ros2 launch rover_vda5050_bringup vda5050.launch.py "${LAUNCH_ARGS[@]}" \
   > /tmp/rover_vda5050.log 2>&1 < /dev/null &
 VDA5050_PID=$!
+set +m
+VDA5050_PGID=$VDA5050_PID
 set -x
 CHILD_PIDS+=("$VDA5050_PID")
 echo "VDA 5050 connector started in background (PID: $VDA5050_PID, broker ${BROKER_HOST}:${BROKER_PORT}, frame ${MAP_FRAME})"
