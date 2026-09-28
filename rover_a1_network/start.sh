@@ -28,9 +28,10 @@ if [ -z "${RUTX11_PASSWORD:-}" ]; then
 fi
 
 export NETUI_DATA="${NETUI_DATA:-/data}"
+export NETUI_BIND="${NETUI_BIND:-0.0.0.0}"
+export NETUI_ICONS="${NETUI_ICONS:-/app/icons}"
 mkdir -p "$NETUI_DATA"
 chown -R netui:netui "$NETUI_DATA"
 
 cd /app
-exec setpriv --reuid=netui --regid=netui --init-groups \
-  python -m uplink_manager.presentation.api
+exec setpriv --reuid=netui --regid=netui --init-groups python -m uplink_manager

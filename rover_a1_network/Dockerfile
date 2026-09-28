@@ -1,17 +1,29 @@
-# rover-a1-network: web page to switch the RUTX11 Wi-Fi uplink (wan1) in place and keep the
-# firewall/NAT consistent, so the wired LAN and the rover AP keep internet. See README.md.
-# No ROS in here; built from this directory, not cloned.
+# rover-a1-network: web page to switch the RUTX11 Wi-Fi uplink in place and keep the
+# firewall/NAT consistent, so the wired LAN and the rover AP keep internet. The application
+# lives in https://github.com/RaduPotlog/rover_rutx11 (docs in its README); this directory only
+# holds the container glue. No ROS in here.
 
-##################################### Test ###################################################
+##################################### Fetch + test ###########################################
 
 FROM python:3.13-slim AS test
-WORKDIR /app
-COPY requirements.txt requirements-test.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
-COPY pytest.ini ./
-COPY uplink_manager ./uplink_manager
-COPY test ./test
-RUN python -m pytest -q -p no:cacheprovider && touch /tmp/tests-passed
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tracks the tip of `master` by default, so every `balena push --nocache` picks up the latest
+# commit; pin a SHA with `--build-arg ROVER_RUTX11_REF=<sha>` for a reproducible build.
+# Same convention as ROVER_DRIVE_INTERFACE_REF / ROVER_ROS_REF in the other services.
+ARG ROVER_RUTX11_REF=master
+# Sparse, blob-less clone: the repo also carries a ~30 MB firmware image under backup/.
+RUN git clone --filter=blob:none --no-checkout https://github.com/RaduPotlog/rover_rutx11.git /src \
+    && git -C /src sparse-checkout set --no-cone '/*' '!/backup/' \
+    && git -C /src checkout ${ROVER_RUTX11_REF}
+
+WORKDIR /src
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt \
+    && python -m pytest -q -p no:cacheprovider \
+    && touch /tmp/tests-passed
 
 ##################################### Runtime ################################################
 
@@ -23,9 +35,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY requirements.txt ./
+COPY --from=test /src/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY uplink_manager ./uplink_manager
+COPY --from=test /src/uplink_manager ./uplink_manager
+COPY --from=test /src/icons ./icons
 # Makes the build fail when the tests fail (an unused stage would otherwise be skipped).
 COPY --from=test /tmp/tests-passed /tmp/tests-passed
 
