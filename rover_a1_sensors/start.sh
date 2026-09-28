@@ -147,11 +147,18 @@ if [ "$ZENOH_ROUTER_READY" != true ]; then
 fi
 
 ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
+# `namespace:=` only when there is one: `ros2 launch` rejects an empty `name:=` ("malformed launch
+# argument") and exits at once, which would crash-loop this service on an unnamespaced rover
+# (rover-a1-vda5050 did, 2026-09-28). The launch files default namespace to ROVER_NAMESPACE.
+NAMESPACE_ARG=()
+if [ -n "$ROVER_NAMESPACE" ]; then
+  NAMESPACE_ARG=(namespace:="${ROVER_NAMESPACE}")
+fi
 
 # **Sensor drivers - Background**
 set -m  # own process group, so stop_launch_groups can signal its nodes
 nohup ros2 launch rover_sensors_bringup rover_sensors.launch.py \
-  namespace:="${ROVER_NAMESPACE}" \
+  "${NAMESPACE_ARG[@]}" \
   use_gps:="${ROVER_USE_GPS}" \
   use_lidar:="${ROVER_USE_LIDAR}" \
   > /tmp/rover_sensors.log 2>&1 < /dev/null &

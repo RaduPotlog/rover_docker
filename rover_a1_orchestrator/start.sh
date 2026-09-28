@@ -184,13 +184,20 @@ pkill -f ros2_daemon || true
 sleep 1
 
 ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
+# `namespace:=` only when there is one: `ros2 launch` rejects an empty `name:=` ("malformed launch
+# argument") and exits at once, which would crash-loop this service on an unnamespaced rover
+# (rover-a1-vda5050 did, 2026-09-28). The launch files default namespace to ROVER_NAMESPACE.
+NAMESPACE_ARG=()
+if [ -n "$ROVER_NAMESPACE" ]; then
+  NAMESPACE_ARG=(namespace:="${ROVER_NAMESPACE}")
+fi
 
 # **Drive modes - Background** (before the Nav 2 gate: MANUAL and ASSISTED need no Nav 2).
 if [ "$START_DRIVE_MODE" = true ]; then
   set -m  # own process group, so stop_launch_groups can signal its nodes
   nohup ros2 launch rover_drive_mode rover_drive_mode.launch.py \
     use_sim_time:="${ROVER_USE_SIM_TIME}" \
-    namespace:="${ROVER_NAMESPACE}" \
+    "${NAMESPACE_ARG[@]}" \
     default_mode:="${ROVER_DRIVE_DEFAULT_MODE}" \
     > /tmp/rover_drive_mode.log 2>&1 < /dev/null &
   DRIVE_MODE_PID=$!
@@ -273,13 +280,13 @@ case "$LOCALIZATION_SOURCE:$ROVER_NAV_MAP" in
 esac
 
 # **Nav 2 - Background**
-# namespace and localization_source are passed explicitly even though both launch files read
-# ROVER_NAMESPACE themselves: rover_mission_manager must be launched with the same
+# localization_source (and namespace, when set) are passed explicitly even though both launch
+# files read the environment themselves: rover_mission_manager must be launched with the same
 # localization_source as rover_navigation, and passing both proves they agree.
 set -m  # own process group, so stop_launch_groups can signal its nodes
 nohup ros2 launch rover_navigation bringup.launch.py \
   use_sim_time:="${ROVER_USE_SIM_TIME}" \
-  namespace:="${ROVER_NAMESPACE}" \
+  "${NAMESPACE_ARG[@]}" \
   localization_source:="${LOCALIZATION_SOURCE}" \
   map:="${ROVER_NAV_MAP}" \
   > /tmp/rover_nav.log 2>&1 < /dev/null &
@@ -294,7 +301,7 @@ if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
   set -m  # own process group, so stop_launch_groups can signal its nodes
   nohup ros2 launch rover_mission_manager rover_mission_manager.launch.py \
     use_sim_time:="${ROVER_USE_SIM_TIME}" \
-    namespace:="${ROVER_NAMESPACE}" \
+    "${NAMESPACE_ARG[@]}" \
     localization_source:="${LOCALIZATION_SOURCE}" \
     > /tmp/rover_mission_manager.log 2>&1 < /dev/null &
   MISSION_PID=$!
