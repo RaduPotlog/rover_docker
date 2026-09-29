@@ -619,7 +619,7 @@ services:
     environment:
       ROVER_NETWORK_ENABLE: 'true'
       NETUI_PORT: '5080'
-      NETUI_USER: 'rover'
+      NETUI_USER: 'root'
       # Set both as service variables of rover-a1-network, not fleet-wide (see README).
       NETUI_PASSWORD:
       RUTX11_PASSWORD:
