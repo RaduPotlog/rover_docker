@@ -434,11 +434,11 @@ keep internet. It also repairs the damage a RutOS *Scan → Join* does. Every ch
 back by the router itself if the new uplink doesn't come up.
 
 The application and all its documentation live in the `rutx11/` folder of
-[rover_networking](https://github.com/RaduPotlog/rover_networking/tree/main/rutx11): usage,
+[rover_networking](https://github.com/RaduPotlog/rover_networking/tree/master/rutx11): usage,
 checks, the rollback design, running it from a laptop, and troubleshooting. This directory
 holds only the container glue. The Dockerfile clones rover_networking at
-`ROVER_NETWORKING_REF` (default `main`; that repo has no `master`), runs the tests in
-`rutx11/`, and fails the build if any test fails.
+`ROVER_NETWORKING_REF` (default `master`), runs the tests in `rutx11/`, and fails the build if
+any test fails.
 
 Set both passwords as **service** variables of `rover-a1-network`. Don't set them fleet-wide,
 or every container would see the router's root password:

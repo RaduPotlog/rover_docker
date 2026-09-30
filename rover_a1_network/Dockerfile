@@ -11,11 +11,10 @@ RUN apt-get update \
     && apt-get install --no-install-recommends -y git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Tracks the tip of `main` by default (rover_networking has no `master`), so every
-# `balena push --nocache` picks up the latest commit; pin a SHA with
-# `--build-arg ROVER_NETWORKING_REF=<sha>` for a reproducible build.
+# Tracks the tip of `master` by default, so every `balena push --nocache` picks up the latest
+# commit; pin a SHA with `--build-arg ROVER_NETWORKING_REF=<sha>` for a reproducible build.
 # Same convention as ROVER_DRIVE_INTERFACE_REF / ROVER_ROS_REF in the other services.
-ARG ROVER_NETWORKING_REF=main
+ARG ROVER_NETWORKING_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_networking.git /src \
     && git -C /src checkout ${ROVER_NETWORKING_REF}
 
