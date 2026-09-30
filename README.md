@@ -17,7 +17,7 @@ service's build context in `docker-compose.yml`:
 | `rover-cockpit`    | `rover_cockpit/`    | Cockpit + [`rover_cockpit_ros2_diagnostics`](https://github.com/RaduPotlog/rover_cockpit_ros2_diagnostics) — ROS 2 Diagnostics / Networking / LEDs web page on port 80 (no ROS inside; the browser talks to foxglove_bridge, and the Networking tab pings the rover's devices), plus an sshd on port 26 and the Claude Code CLI with `ros-mcp` registered |
 | `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25 and the Claude Code CLI with `ros-mcp` registered. See [Drive interface](#drive-interface) |
 | `rover-a1-vda5050` | `rover_a1_vda5050/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_vda5050`](https://github.com/RaduPotlog/rover_vda5050) — the VDA 5050 2.0 fleet interface (InOrbit's MQTT connector, vendored, driving the rover through `rover_mission_manager`), an optional Mosquitto broker (1883, WebSockets 9001), plus an sshd on port 27 and the Claude Code CLI with `ros-mcp` registered. Idle unless enabled, see [VDA 5050](#vda-5050) |
-| `rover-a1-network` | `rover_a1_network/` | Python + [`rover_rutx11`](https://github.com/RaduPotlog/rover_rutx11): web page on port 5080 (behind a login) that switches the RUTX11's Wi-Fi uplink in place and keeps the router's firewall/NAT consistent (no ROS, no sshd). See [Network uplink page](#network-uplink-page) |
+| `rover-a1-network` | `rover_a1_network/` | Python + [`rover_networking`](https://github.com/RaduPotlog/rover_networking) (`rutx11/`): web page on port 5080 (behind a login) that switches the RUTX11's Wi-Fi uplink in place and keeps the router's firewall/NAT consistent (no ROS, no sshd). See [Network uplink page](#network-uplink-page) |
 
 ```
 rover_docker/
@@ -154,7 +154,7 @@ balena push g_potlog_radu/rovera1 --nocache
 `--nocache` matters: every service fetches its application source with
 `git clone` during the build (`rover_ros`; `rover_ros` + `rover_orchestrator`;
 `rover_sensors`; `rover_cockpit_ros2_diagnostics`; `rover_drive_interface`; and
-`rover_rutx11` respectively). Those
+`rover_networking` respectively). Those
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
@@ -166,7 +166,7 @@ balena push g_potlog_radu/rovera1 \
   --build-arg ROVER_ORCHESTRATOR_REF=<sha> \
   --build-arg ROVER_SENSORS_REF=<sha> \
   --build-arg ROVER_COCKPIT_REF=<sha> \
-  --build-arg ROVER_RUTX11_REF=<sha>
+  --build-arg ROVER_NETWORKING_REF=<sha>
 ```
 
 `ROVER_ROS_REF` is consumed by both `rover-a1-platform` and `rover-a1-orchestrator`, so the
@@ -433,11 +433,12 @@ keeping the router's firewall zones, NAT and forwarding valid, so the wired LAN 
 keep internet. It also repairs the damage a RutOS *Scan → Join* does. Every change is rolled
 back by the router itself if the new uplink doesn't come up.
 
-The application and all its documentation live in
-[rover_rutx11](https://github.com/RaduPotlog/rover_rutx11): usage, checks, the rollback design,
-running it from a laptop, and troubleshooting. This directory holds only the container glue.
-The Dockerfile clones rover_rutx11 at `ROVER_RUTX11_REF` (default `master`), leaving out its
-`backup/` folder, runs its tests, and fails the build if any test fails.
+The application and all its documentation live in the `rutx11/` folder of
+[rover_networking](https://github.com/RaduPotlog/rover_networking/tree/main/rutx11): usage,
+checks, the rollback design, running it from a laptop, and troubleshooting. This directory
+holds only the container glue. The Dockerfile clones rover_networking at
+`ROVER_NETWORKING_REF` (default `main`; that repo has no `master`), runs the tests in
+`rutx11/`, and fails the build if any test fails.
 
 Set both passwords as **service** variables of `rover-a1-network`. Don't set them fleet-wide,
 or every container would see the router's root password:
