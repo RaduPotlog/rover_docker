@@ -604,11 +604,11 @@ services:
       start_period: 30s
       retries: 3
 
-  # Wi-Fi uplink page (app: github.com/RaduPotlog/rover_rutx11): switches the RUTX11's Wi-Fi
-  # client to another network IN PLACE and keeps firewall zones / NAT / forwarding consistent, so
-  # the wired LAN and the rover AP keep internet. Talks to the router over SSH; changes are rolled
-  # back by the router itself if the new uplink does not come up. No ROS, no sshd. Idles without
-  # NETUI_PASSWORD / RUTX11_PASSWORD.
+  # Wi-Fi uplink page (app: github.com/RaduPotlog/rover_networking, rutx11/): switches the
+  # RUTX11's Wi-Fi client to another network IN PLACE and keeps firewall zones / NAT /
+  # forwarding consistent, so the wired LAN and the rover AP keep internet. Talks to the router
+  # over SSH; changes are rolled back by the router itself if the new uplink does not come up.
+  # No ROS, no sshd. Idles without NETUI_PASSWORD / RUTX11_PASSWORD.
   rover-a1-network:
     build:
       context: ./rover_a1_network
