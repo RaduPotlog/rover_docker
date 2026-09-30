@@ -133,7 +133,10 @@ RUN mkdir -p /maps
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
 # packages are never built, `--packages-up-to rover_autonomy` stops short of them.
-ARG ROVER_ROS_REF=master
+# TEMPORARY (feature/wheel-pid-stop-and-windup): tracks the wheel-PID branch instead of
+# master. Set back to master once that branch is merged. Keep ROVER_ROS_REF equal in
+# rover_a1_platform, rover_a1_orchestrator and rover_a1_vda5050.
+ARG ROVER_ROS_REF=feature/wheel-pid-stop-and-windup
 ARG ROVER_ORCHESTRATOR_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
