@@ -176,6 +176,8 @@ fi
 if [ -n "${ROVER_VDA5050_BROKER_PASSWORD:-}" ]; then
   LAUNCH_ARGS+=(broker_password:="${ROVER_VDA5050_BROKER_PASSWORD}")
 fi
+# auto = TLS when a user is set; false = user/password in clear (broker inside WireGuard).
+export VDA5050_CONNECTOR_TLS="${ROVER_VDA5050_BROKER_TLS:-auto}"
 # Not traced: the password would land in the balena logs.
 set +x
 # As a job (set -m), so the launch and its nodes get their own process group (PGID = its PID)

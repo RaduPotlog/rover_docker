@@ -490,6 +490,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | `ROVER_VDA5050_LOCAL_BROKER` | `true` | vda5050 | Run Mosquitto in the container (1883, WebSockets 9001, anonymous). `false` when master control brings its own broker. |
 | `ROVER_VDA5050_BROKER_HOST` / `_PORT` | `127.0.0.1` / `1883` | vda5050 | The broker the connector uses. |
 | `ROVER_VDA5050_BROKER_USER` / `_PASSWORD` | unset | vda5050 | Broker login. A user also switches the connector to TLS (CA bundle from `VDA5050_CONNECTOR_TLS_CA_CERT`, default the system bundle). |
+| `ROVER_VDA5050_BROKER_TLS` | `auto` | vda5050 | `auto`: TLS when a user is set. `false`: user/password without TLS, for a broker reached through WireGuard. `true`: always TLS. |
 | `ROVER_VDA5050_MANUFACTURER` / `_SERIAL_NUMBER` | `MechatronicsAcademy` / `rover_a1` | vda5050 | VDA 5050 identity; topics are `uagv/v2/<manufacturer>/<serial>/…`. |
 | `ROVER_VDA5050_MAP_FRAME` | unset | vda5050 | Nav 2 frame the order coordinates are in (prefixed with the namespace). Unset follows the orchestrator's localization source like its `start.sh` does: `odom` for odom, `map` for gps/slam/amcl/indoor. |
 
