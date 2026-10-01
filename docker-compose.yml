@@ -44,8 +44,9 @@ version: '2.4'
 #                              no password = nginx is not started (the container idles, sshd on 25 only)
 # ROVER_START_VDA5050          vda5050: run the VDA 5050 fleet interface (default false; orders need
 #                              ROVER_START_MISSION_MANAGER=true on the orchestrator)
-# ROVER_VDA5050_*              vda5050: local Mosquitto on/off, broker host/port/user/password (a user
-#                              also enables TLS), manufacturer + serial number (MQTT topic levels),
+# ROVER_VDA5050_*              vda5050: local Mosquitto on/off, broker host/port/user/password, TLS
+#                              (auto = on when a user is set, false = plaintext e.g. over WireGuard),
+#                              manufacturer + serial number (MQTT topic levels),
 #                              Nav 2 frame of the order coordinates (unset = odom or map, following
 #                              the orchestrator's localization source)
 #
@@ -126,6 +127,7 @@ services:
       ROVER_VDA5050_BROKER_PORT: '1883'
       ROVER_VDA5050_BROKER_USER:
       ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
@@ -219,6 +221,7 @@ services:
       ROVER_VDA5050_BROKER_PORT: '1883'
       ROVER_VDA5050_BROKER_USER:
       ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
@@ -297,6 +300,7 @@ services:
       ROVER_VDA5050_BROKER_PORT: '1883'
       ROVER_VDA5050_BROKER_USER:
       ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
@@ -367,6 +371,7 @@ services:
       ROVER_VDA5050_BROKER_PORT: '1883'
       ROVER_VDA5050_BROKER_USER:
       ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
@@ -437,6 +442,7 @@ services:
 #       ROVER_VDA5050_BROKER_PORT: '1883'
 #       ROVER_VDA5050_BROKER_USER:
 #       ROVER_VDA5050_BROKER_PASSWORD:
+#       ROVER_VDA5050_BROKER_TLS: 'auto'
 #       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
 #       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
 #       ROVER_VDA5050_MAP_FRAME:
@@ -512,6 +518,7 @@ services:
       ROVER_VDA5050_BROKER_PORT: '1883'
       ROVER_VDA5050_BROKER_USER:
       ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
@@ -592,6 +599,7 @@ services:
       ROVER_VDA5050_BROKER_PORT: '1883'
       ROVER_VDA5050_BROKER_USER:
       ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:

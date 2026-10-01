@@ -501,6 +501,7 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 | `ROVER_VDA5050_LOCAL_BROKER` | `true` | vda5050 | Run Mosquitto in the container (1883, WebSockets 9001, anonymous). `false` when master control brings its own broker. |
 | `ROVER_VDA5050_BROKER_HOST` / `_PORT` | `127.0.0.1` / `1883` | vda5050 | The broker the connector uses. |
 | `ROVER_VDA5050_BROKER_USER` / `_PASSWORD` | unset | vda5050 | Broker login. A user also switches the connector to TLS (CA bundle from `VDA5050_CONNECTOR_TLS_CA_CERT`, default the system bundle). |
+| `ROVER_VDA5050_BROKER_TLS` | `auto` | vda5050 | `auto`: TLS when a user is set. `false`: user/password without TLS, for a broker reached through WireGuard. `true`: always TLS. |
 | `ROVER_VDA5050_MANUFACTURER` / `_SERIAL_NUMBER` | `MechatronicsAcademy` / `rover_a1` | vda5050 | VDA 5050 identity; topics are `uagv/v2/<manufacturer>/<serial>/…`. |
 | `ROVER_VDA5050_MAP_FRAME` | unset | vda5050 | Nav 2 frame the order coordinates are in (prefixed with the namespace). Unset follows the orchestrator's localization source like its `start.sh` does: `odom` for odom, `map` for gps/slam/amcl/indoor. |
 
@@ -708,3 +709,49 @@ ros2 topic list   # in another shell with RMW_IMPLEMENTATION set
 ```
 
 `ROS_DOMAIN_ID` must match on both sides (the rover uses the default, `0`).
+
+## Remote access over WireGuard
+
+For remote work, SSH, the web UIs, Foxglove and MQTT reach the controller through a WireGuard
+VPN. Nothing VPN-related runs on the device. The RUTX11 is a WireGuard peer and routes into
+the rover LAN, so the controller is reached at its usual LAN address, `192.168.1.201`.
+
+```
+laptop 10.8.0.4 ──wg──> server 10.8.0.1 ──wg──> RUTX11 10.8.0.5 ──firewall──> controller 192.168.1.201
+```
+
+- **Server** (`/etc/wireguard/wg0.conf`): the RUTX11 peer has
+  `AllowedIPs = 10.8.0.5/32, 192.168.1.0/24`, and `PostUp` allows forwarding `wg0 → wg0`.
+- **RUTX11**: interface `wg0`, peer `roverser`. Its settings:
+  - Split tunnel: `allowed_ips=10.8.0.0/24`, so the rover's internet traffic doesn't go through
+    the server.
+  - `route_allowed_ips=1`, which gives the controller's replies a way back. The controller's
+    default route is the RUTX11.
+  - `mtu=1380`, `persistent_keepalive=25`.
+- **Laptop peer**: `AllowedIPs = 10.8.0.0/24, 192.168.1.201/32`, `MTU = 1380`. Turn the tunnel
+  off while on the rover LAN or AP, or rover traffic hairpins through the server.
+
+The RUTX11 firewall zone `wireguard` lets only the laptop (`10.8.0.4`) through, and only to
+these ports on `192.168.1.201`:
+
+| Port | Service |
+|---|---|
+| 22–27 | SSH into the containers |
+| 80, 5000 | Drive UI (`ROVER_DRIVE_PORT`; the fleet variable sets 80) |
+| 5080 | Uplink page |
+| 8765 | foxglove_bridge |
+| 1883, 9001 | MQTT, MQTT over WebSockets |
+| ICMP echo | ping |
+
+The router itself answers ping, SSH (22) and HTTPS (443) on `10.8.0.5`. A final rule,
+`VPN-reject-everything-else`, rejects the rest, Zenoh 7447 and rosbridge 9090 included. It is
+required: RutOS's default forward policy is ACCEPT, and the zone's `forward=REJECT` only covers
+traffic leaving `wg0`. To let in another VPN peer or port, copy a `VPN-laptop-ctrl-*` rule and
+`uci reorder` it before the reject.
+
+On the SIM uplink, keep data down:
+
+- Foxglove sends exactly what a panel subscribes to. Leave point clouds, images and costmaps
+  closed.
+- Subscribe MQTT to specific topics, not `#`.
+- Deploy (`balena push` image pulls) only on Wi-Fi.
