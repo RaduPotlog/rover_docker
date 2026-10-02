@@ -114,10 +114,7 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-# TEMPORARY (feature/wheel-pid-stop-and-windup): tracks the wheel-PID branch instead of
-# master. Set back to master once that branch is merged. Keep ROVER_ROS_REF equal in
-# rover_a1_platform, rover_a1_orchestrator and rover_a1_vda5050.
-ARG ROVER_ROS_REF=feature/wheel-pid-stop-and-windup
+ARG ROVER_ROS_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc

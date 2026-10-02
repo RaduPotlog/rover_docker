@@ -104,10 +104,7 @@ WORKDIR /root/ros2_ws/rover_a1
 # and the rover's adapter and bringup. rover_ros is cloned only for rover_msgs (mission, drive
 # mode and safety messages); nothing else of it is built or rosdep-resolved.
 # Keep ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator and here.
-# TEMPORARY (feature/wheel-pid-stop-and-windup): tracks the wheel-PID branch instead of
-# master. Set back to master once that branch is merged. Keep ROVER_ROS_REF equal in
-# rover_a1_platform, rover_a1_orchestrator and rover_a1_vda5050.
-ARG ROVER_ROS_REF=feature/wheel-pid-stop-and-windup
+ARG ROVER_ROS_REF=master
 ARG ROVER_VDA5050_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}

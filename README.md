@@ -162,13 +162,6 @@ balena push g_potlog_radu/rovera1 --nocache
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
 
-> **Temporary branch defaults (wheel PID).** On the `feature/wheel-pid-stop-and-windup` branch of
-> this repo, the Dockerfiles default `ROVER_ROS_REF` (platform, orchestrator and vda5050, kept
-> equal) to `feature/wheel-pid-stop-and-windup` instead of `master`. That rover_ros branch makes
-> the wheel PIDs stop at exactly zero (so the DCC1000 brakes) and integrate against a delayed
-> reference. It must exist on GitHub before a build. Set the defaults back to `master` once it is
-> merged.
-
 Select specific application commits instead of branch tips with:
 
 ```bash
