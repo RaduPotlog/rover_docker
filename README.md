@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="icons/Logo-Arm-WhiteOrange-372x372-1.png" alt="Mechatronics Academy" width="140">
+</p>
+
 # rover_docker
 
 Docker files to build the ARM64 balena application release for the Rover A1.
@@ -157,6 +161,13 @@ balena push g_potlog_radu/rovera1 --nocache
 `rover_networking` respectively). Those
 clones sit in cached layers, so a plain `balena push` will happily ship stale application
 code.
+
+> **Temporary branch defaults (wheel PID).** On the `feature/wheel-pid-stop-and-windup` branch of
+> this repo, the Dockerfiles default `ROVER_ROS_REF` (platform, orchestrator and vda5050, kept
+> equal) to `feature/wheel-pid-stop-and-windup` instead of `master`. That rover_ros branch makes
+> the wheel PIDs stop at exactly zero (so the DCC1000 brakes) and integrate against a delayed
+> reference. It must exist on GitHub before a build. Set the defaults back to `master` once it is
+> merged.
 
 Select specific application commits instead of branch tips with:
 
