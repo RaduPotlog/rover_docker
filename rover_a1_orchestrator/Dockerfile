@@ -147,9 +147,9 @@ RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orc
 # rosdep can resolve every package in src/rover_ros; none of them is built here.
 RUN vcs import src < src/rover_ros/rover_metapackage/${ROVER_ROS_BUILD_TYPE}_deps.repos
 
-# autonomy_deps.repos brings pointcloud_crop_box - the self-filter for rover_navigation's
-# `pointcloud` observation path, source-only so it cannot come from rosdep. Every nav2_*
-# package, nav2_smac_planner included, is an arm64 deb and comes from the rosdep pass below.
+# autonomy_deps.repos is the extension point for source-only orchestrator dependencies; it
+# pins nothing today. Every nav2_* package, nav2_smac_planner included, is an arm64 deb and
+# comes from the rosdep pass below.
 RUN vcs import src < src/rover_orchestrator/rover_autonomy/autonomy_deps.repos
 
 RUN rosdep init
@@ -157,8 +157,7 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # Scans all of src/: src/rover_ros is cloned whole, so rosdep also installs the apt
 # dependencies of its hardware packages even though colcon never builds them. The lidar and
 # GPS drivers are not in rover_ros any more (they are the rover_sensors payload, built by
-# rover-a1-sensors). src/rover_pointcloud_crop_box must stay in src/ so -i ignores its
-# `pointcloud_crop_box` key.
+# rover-a1-sensors).
 # Pulls the Nav 2 stack (nav2_smac_planner and nav2_amcl included), slam_toolbox,
 # spatio_temporal_voxel_layer and behaviortree_cpp. nav2_amcl arrives because
 # rover_navigation declares it - localization_source:=amcl launches it - so it needs no
