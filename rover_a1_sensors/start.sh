@@ -117,14 +117,15 @@ ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" false)
 # One switch for GPS on the whole rover: the driver here, GPS fusion in rover-a1-platform.
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
+ROVER_USE_CAMERA=$(norm_bool "${ROVER_USE_CAMERA:-}" false)
 
 # With no driver selected the launch has nothing to run and exits at once, so that case is
 # treated as disabled too.
 DISABLED_REASON=""
 if [ "$ROVER_START_SENSORS" != true ]; then
   DISABLED_REASON="ROVER_START_SENSORS=false"
-elif [ "$ROVER_USE_GPS" != true ] && [ "$ROVER_USE_LIDAR" != true ]; then
-  DISABLED_REASON="ROVER_USE_GPS=false and ROVER_USE_LIDAR=false (no driver to run)"
+elif [ "$ROVER_USE_GPS" != true ] && [ "$ROVER_USE_LIDAR" != true ] && [ "$ROVER_USE_CAMERA" != true ]; then
+  DISABLED_REASON="ROVER_USE_GPS, ROVER_USE_LIDAR and ROVER_USE_CAMERA all false (no driver to run)"
 fi
 
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
@@ -175,12 +176,13 @@ nohup ros2 launch rover_sensors_bringup rover_sensors.launch.py \
   "${NAMESPACE_ARG[@]}" \
   use_gps:="${ROVER_USE_GPS}" \
   use_lidar:="${ROVER_USE_LIDAR}" \
+  use_camera:="${ROVER_USE_CAMERA}" \
   > /tmp/rover_sensors.log 2>&1 < /dev/null &
 SENSORS_PID=$!
 set +m
 LAUNCH_PGIDS+=("$SENSORS_PID")
 CHILD_PIDS+=("$SENSORS_PID")
-echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR)"
+echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR, camera=$ROVER_USE_CAMERA)"
 
 # **Supervise** - exit when the launch exits (crash or otherwise), so docker-compose's
 # `restart: always` (Balena) brings the drivers back up cleanly.

@@ -136,6 +136,13 @@ ARG ROVER_SENSORS_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_sensors.git src/rover_sensors \
     && git -C src/rover_sensors checkout ${ROVER_SENSORS_REF}
 
+# Camera and perception nodes (RealSense, depth cloud, AprilTag, YOLO detection, terrain slope);
+# rover_sensors_bringup includes its launch file, which does nothing until ROVER_USE_CAMERA /
+# ROVER_USE_TERRAIN is true. Pin with --build-arg ROVER_PERCEPTION_REF=<ref>.
+ARG ROVER_PERCEPTION_REF=master
+RUN git clone https://github.com/RaduPotlog/rover_perception.git src/rover_perception \
+    && git -C src/rover_perception checkout ${ROVER_PERCEPTION_REF}
+
 RUN vcs import src < src/rover_sensors/sensors_deps.repos
 
 RUN rosdep init
@@ -145,6 +152,10 @@ RUN rosdep update --rosdistro "${ROS_DISTRO}"
 RUN apt-get update \
     && rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i \
     && rm -rf /var/lib/apt/lists/*
+
+# CPU ONNX Runtime for rover_perception_detection (not a rosdep key); ~15 MB, loaded only when
+# ROVER_CAMERA_DETECTION=true.
+RUN uv pip install --system --break-system-packages onnxruntime
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \
     && colcon build --symlink-install --packages-up-to rover_sensors_bringup \

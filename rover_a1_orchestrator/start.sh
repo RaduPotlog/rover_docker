@@ -133,6 +133,8 @@ esac
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_GPS_PUBLISH_MAP_TF=$(norm_bool "${ROVER_GPS_PUBLISH_MAP_TF:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
+# Adds the RealSense depth cloud to the local costmap; the driver itself runs in rover-a1-sensors.
+ROVER_USE_CAMERA=$(norm_bool "${ROVER_USE_CAMERA:-}" false)
 # true only when the platform is rover_gazebo (Gazebo publishes /clock); never on the rover.
 ROVER_USE_SIM_TIME=$(norm_bool "${ROVER_USE_SIM_TIME:-}" false)
 
@@ -302,6 +304,7 @@ nohup ros2 launch rover_navigation bringup.launch.py \
   use_sim_time:="${ROVER_USE_SIM_TIME}" \
   "${NAMESPACE_ARG[@]}" \
   localization_source:="${LOCALIZATION_SOURCE}" \
+  use_camera:="${ROVER_USE_CAMERA}" \
   map:="${ROVER_NAV_MAP}" \
   > /tmp/rover_nav.log 2>&1 < /dev/null &
 NAV_PID=$!

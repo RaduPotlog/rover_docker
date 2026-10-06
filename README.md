@@ -509,6 +509,13 @@ See [VDA 5050](#vda-5050) for what the interface supports.
 | `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF; it publishes `map → odom` only with `ROVER_GPS_PUBLISH_MAP_TF=true`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
 | `ROVER_GPS_PUBLISH_MAP_TF` | `false` | platform, orchestrator | Only matters with `ROVER_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
+| `ROVER_USE_CAMERA` | `false` | sensors, orchestrator | Starts the RealSense D435i driver and the camera perception nodes in `rover-a1-sensors` (see [rover_perception](../src/rover_perception/README.md)), and adds its depth cloud (`camera/depth/points`) as a second source of the **local** Nav 2 costmap in the orchestrator. `false` leaves Nav 2 exactly as it was, with the lidar scan as the only source. Counts as a driver for `ROVER_START_SENSORS`, so a camera-only payload does not idle. Needs USB access to the camera in the container. |
+| `ROVER_CAMERA_DEPTH_CLOUD` | `true` | sensors | With `ROVER_USE_CAMERA=true`: publish the depth image as a `PointCloud2` for the costmap (CPU only). |
+| `ROVER_CAMERA_FIDUCIALS` | `false` | sensors | With `ROVER_USE_CAMERA=true`: AprilTag (36h11) detection on the colour stream. The tag size in `rover_perception_bringup/config/apriltag.yaml` is an assumption until measured. |
+| `ROVER_CAMERA_DETECTION` | `false` | sensors | With `ROVER_USE_CAMERA=true`: YOLO object detection on the colour stream (`detections`, `vision_msgs/Detection2DArray`). Needs `ROVER_CAMERA_DETECTION_MODEL`. |
+| `ROVER_CAMERA_DETECTION_MODEL` | *(unset)* | sensors | Path inside the container of a YOLOv8/v11 `.onnx` file, for example on a volume. Without it the detector refuses to configure and logs why. |
+| `ROVER_CAMERA_DETECTION_GPU` | `false` | sensors | `true` asks ONNX Runtime for CUDA. The rover image ships CPU `onnxruntime` only, so this is for a GPU host. |
+| `ROVER_USE_TERRAIN` | `false` | sensors | Ground slope from the lidar cloud (`terrain/incline`, `terrain/ground_confidence`). Independent of the camera; needs `ROVER_USE_LIDAR=true`. |
 | `ROVER_FOXGLOVE_TOPIC_WHITELIST` | *(unset)* | platform | `foxglove_bridge`'s `topic_whitelist`. Unset: only the topics the drive UI and the Cockpit use (listed in `rover_bringup/launch/rover_web_bridges.launch.py`), because anything a browser subscribes to crosses the Zenoh router at full rate. Set `['.*']` to see the whole graph in Foxglove Studio while debugging. |
 | `ROVER_FOXGLOVE_SERVICE_WHITELIST` | *(unset)* | platform | `foxglove_bridge`'s `service_whitelist`. Unset: only the services the drive UI and the Cockpit call (listed in `rover_bringup/launch/rover_web_bridges.launch.py`). Otherwise the bridge advertises every service on the graph and logs a warning for each one whose package isn't in the platform image (slam_toolbox, the voxel layer). A UI can only call a service the bridge advertises. Set `['.*']` to reach every service from Foxglove Studio while debugging. |
 | `ROVER_LAN_IP` | `192.168.1.201` | zenoh-router | Rover LAN address the Zenoh router binds. Not in `docker-compose.yml`; set it in balenaCloud to change it. |
@@ -531,6 +538,8 @@ warning in `/tmp/rover_bringup.log`.
 | `ROVER_GPS_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
 | `ROVER_LIDAR_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0` |
 | `ROVER_LIDAR_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
+| `ROVER_CAMERA_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0.25` / `0.0` / `0.2` (assumed, not measured) |
+| `ROVER_CAMERA_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
 
 ### Cockpit login
 
