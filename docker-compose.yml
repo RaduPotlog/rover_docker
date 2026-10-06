@@ -348,6 +348,10 @@ services:
     restart: always
     # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
     network_mode: host
+    # The RealSense D435i enumerates under /dev/bus/usb and /dev/video*, and re-enumerates on
+    # every re-plug, so a fixed `devices:` list would not follow it. Same approach as the
+    # platform service. Only needed with ROVER_USE_CAMERA=true.
+    privileged: true
     environment:
       ROVER_NAMESPACE: 'rover'
       ROVER_ZENOH_MODE: 'client'
@@ -369,6 +373,10 @@ services:
       ROVER_CAMERA_DETECTION_MODEL:
       ROVER_CAMERA_DETECTION_GPU: 'false'
       ROVER_USE_TERRAIN: 'false'
+      ROVER_CAMERA_FPS: '15'
+      ROVER_CAMERA_DEPTH_PROFILE: '424x240'
+      ROVER_CAMERA_FIDUCIALS_DECIMATE: '2.0'
+      ROVER_CAMERA_DETECTION_MAX_RATE: '10.0'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
       ROVER_AMCL_INITIAL_POSE_X:
