@@ -90,6 +90,104 @@ terminate_children() {
 # of only whichever one happens to be PID 1.
 trap 'terminate_children; exit 0' TERM INT
 
+# --- BEGIN log housekeeping -------------------------------------------------------------------
+# Nothing used to rotate or delete logs: /tmp/rover_bringup.log grew for as long as the container
+# stayed up (about 13 MB/day idle, far more if a fault spams) and was overwritten when it restarted,
+# which also destroyed the log of whatever crashed it; ~/.ros/log gained an entry for every
+# process start and every `ros2` CLI call, forever.
+#   ROVER_LOG_MAX_MB          size at which a log is rotated (default 20)
+#   ROVER_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
+#   ROVER_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
+#   ROVER_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
+ROVER_LOG_MAX_BYTES=$(( ${ROVER_LOG_MAX_MB:-20} * 1024 * 1024 ))
+ROVER_LOG_BACKUP_COUNT=${ROVER_LOG_BACKUPS:-3}
+
+# Copies stdin to FILE and keeps it below MAX_BYTES: when the next line would not fit, FILE becomes
+# FILE.1, FILE.1 becomes FILE.2 ... and the oldest of BACKUPS copies is dropped. A FILE left over
+# from a previous run is rotated out of the way first instead of being overwritten.
+# It is the other end of the launch's stdout pipe, so it must outlive every writer: it ignores the
+# SIGINT stop_launch_groups sends the whole launch group (the shutdown messages are worth keeping),
+# never exits before EOF, and on a write error (full disk) keeps draining so the nodes never get a
+# SIGPIPE.
+read -r -d '' ROVER_ROTATING_LOG_PY <<'PY' || true
+import os, signal, sys
+
+path, max_bytes, backups = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def rotate():
+    if backups > 0:
+        for i in range(backups - 1, 0, -1):
+            try:
+                os.replace("%s.%d" % (path, i), "%s.%d" % (path, i + 1))
+            except FileNotFoundError:
+                pass
+        os.replace(path, path + ".1")
+    else:
+        os.truncate(path, 0)
+
+
+def open_log():
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            rotate()
+    except OSError:
+        pass
+    return open(path, "ab", buffering=0)
+
+
+out, size = None, 0
+try:
+    out = open_log()
+except OSError:
+    out = None
+
+while True:
+    line = sys.stdin.buffer.readline(65536)
+    if not line:
+        break
+    try:
+        if out is not None and size > 0 and size + len(line) > max_bytes:
+            out.close()
+            out = None
+            rotate()
+            out = open(path, "ab", buffering=0)
+            size = 0
+        if out is None:
+            out = open_log()
+            size = 0
+        out.write(line)
+        size += len(line)
+    except OSError:
+        out = None
+PY
+
+rotating_log() {
+  exec python3 -u -c "$ROVER_ROTATING_LOG_PY" "$@"
+}
+
+# Delete ros logs older than ROVER_ROS_LOG_KEEP_DAYS, then the oldest ones until the directory is
+# below ROVER_ROS_LOG_MAX_MB. Called before anything is launched, so no live log is touched.
+prune_ros_logs() {
+  local - dir days max_mb entry
+  set +x  # the size loop would flood the container log
+  dir=${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}
+  days=${ROVER_ROS_LOG_KEEP_DAYS:-7}
+  max_mb=${ROVER_ROS_LOG_MAX_MB:-300}
+  [ -d "$dir" ] || return 0
+  find "$dir" -mindepth 1 -maxdepth 1 -mtime +"$days" -exec rm -rf {} + 2>/dev/null || true
+  while [ "$(du -sm "$dir" 2>/dev/null | cut -f1)" -gt "$max_mb" ] 2>/dev/null; do
+    entry=$(ls -tr "$dir" | head -n 1)
+    [ -n "$entry" ] || break
+    rm -rf -- "${dir:?}/$entry"
+  done
+  echo "ROS log housekeeping: $dir now $(du -sm "$dir" 2>/dev/null | cut -f1) MB, $(ls "$dir" 2>/dev/null | wc -l) entries"
+}
+# --- END log housekeeping ---------------------------------------------------------------------
+
+prune_ros_logs
+
 # SSHD background (keep alive)
 /usr/sbin/sshd -D &
 SSHD_PID=$!
@@ -162,7 +260,10 @@ fi
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
   set -m  # own process group, so stop_launch_groups can signal its nodes
-  nohup ros2 launch rover_bringup rover_bringup.launch.py > /tmp/rover_bringup.log 2>&1 < /dev/null &
+  # `> >(...)` rather than a pipe: $! must stay the PID (and process group) of `ros2 launch` itself,
+  # which stop_launch_groups and `wait -n` below depend on.
+  nohup ros2 launch rover_bringup rover_bringup.launch.py \
+    > >(rotating_log /tmp/rover_bringup.log "$ROVER_LOG_MAX_BYTES" "$ROVER_LOG_BACKUP_COUNT") 2>&1 < /dev/null &
   ROVER_PID=$!
   set +m
   LAUNCH_PGIDS+=("$ROVER_PID")
@@ -183,7 +284,8 @@ sleep 2
 #   ros-mcp-server to introspect and control the ROS graph.
 # rover_web_bridges.launch.py starts them under rover_-prefixed node names.
 set -m  # own process group, so stop_launch_groups can signal its nodes
-nohup ros2 launch rover_bringup rover_web_bridges.launch.py > /tmp/web_bridges.log 2>&1 < /dev/null &
+nohup ros2 launch rover_bringup rover_web_bridges.launch.py \
+  > >(rotating_log /tmp/web_bridges.log "$ROVER_LOG_MAX_BYTES" "$ROVER_LOG_BACKUP_COUNT") 2>&1 < /dev/null &
 BRIDGES_PID=$!
 set +m
 LAUNCH_PGIDS+=("$BRIDGES_PID")
