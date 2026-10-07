@@ -213,6 +213,7 @@ All containers use host networking, so these bind directly to the device:
 | 9001   | MQTT over WebSockets (`rover-a1-vda5050`'s Mosquitto), for browser tools such as vda5050_visualizer |
 | 9090   | rosbridge websocket (ros-mcp-server only; dashboards use 8765) — served by `rover-a1-platform`, used by the `ros-mcp` in **every** container |
 | 10110/udp | RUTX11 NMEA forwarding → GNSS driver (`rover-a1-sensors`) |
+| 10111/udp | RUTX11 Serial Utilities → ELRS CRSF → RC teleop (`rover-a1-platform`, `rover_crsf_udp_receiver`; accepts `192.168.1.1` only) |
 | 6699/udp, 7788/udp | RoboSense RS16 MSOP / DIFOP → lidar driver (`rover-a1-sensors`) |
 | 48484  | balena supervisor              |
 
