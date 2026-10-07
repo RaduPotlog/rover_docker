@@ -128,7 +128,11 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-ARG ROVER_ROS_REF=master
+# TEMPORARY: builds rover_ros's instrumented/failsafe-off (DCC1000 motor-driver failsafe OFF via
+# the URDF's motor_failsafe_enabled=false, command-path diagnostics, master merged in). A
+# stalled write() loop then leaves the wheels at their last duty command - wheels lifted or
+# low speed, RC E-Stop in reach. Set back to master when done measuring.
+ARG ROVER_ROS_REF=instrumented/failsafe-off
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN echo "export ROVER_ROS_BUILD_TYPE=hardware" >> /root/.bashrc

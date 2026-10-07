@@ -147,7 +147,11 @@ RUN mkdir -p /maps
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
 # packages are never built, `--packages-up-to rover_autonomy` stops short of them.
-ARG ROVER_ROS_REF=master
+# TEMPORARY: builds rover_ros's instrumented/failsafe-off (DCC1000 motor-driver failsafe OFF via
+# the URDF's motor_failsafe_enabled=false, command-path diagnostics, master merged in). A
+# stalled write() loop then leaves the wheels at their last duty command - wheels lifted or
+# low speed, RC E-Stop in reach. Set back to master when done measuring.
+ARG ROVER_ROS_REF=instrumented/failsafe-off
 ARG ROVER_ORCHESTRATOR_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}

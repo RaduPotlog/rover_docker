@@ -118,7 +118,11 @@ WORKDIR /root/ros2_ws/rover_a1
 # and the rover's adapter and bringup. rover_ros is cloned only for rover_msgs (mission, drive
 # mode and safety messages); nothing else of it is built or rosdep-resolved.
 # Keep ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator and here.
-ARG ROVER_ROS_REF=master
+# TEMPORARY: builds rover_ros's instrumented/failsafe-off (DCC1000 motor-driver failsafe OFF via
+# the URDF's motor_failsafe_enabled=false, command-path diagnostics, master merged in). A
+# stalled write() loop then leaves the wheels at their last duty command - wheels lifted or
+# low speed, RC E-Stop in reach. Set back to master when done measuring.
+ARG ROVER_ROS_REF=instrumented/failsafe-off
 ARG ROVER_VDA5050_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
