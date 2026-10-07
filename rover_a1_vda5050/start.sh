@@ -322,6 +322,17 @@ for entry in "${STATUS_ENTRIES[@]}"; do
   IFS=: read -r name pid log <<< "$entry"
   if ! kill -0 "$pid" 2>/dev/null; then
     echo "Supervised process '$name' (PID $pid) exited (code $EXIT_CODE)"
+    if [ -n "$log" ]; then
+      # The rotating writer drains the dead process's pipe asynchronously: give it a moment (at
+      # most ~1 s) to flush the final lines before they are read.
+      prev=-1
+      for _ in 1 2 3 4 5 6 7 8 9 10; do
+        size=$(stat -c %s "$log" 2>/dev/null || echo 0)
+        [ "$size" = "$prev" ] && break
+        prev=$size
+        sleep 0.1
+      done
+    fi
     if [ -n "$log" ] && [ -s "$log" ]; then
       echo "----- last lines of $log -----"
       tail -n 60 "$log"
