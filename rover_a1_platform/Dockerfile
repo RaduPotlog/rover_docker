@@ -128,10 +128,10 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-# TEMPORARY: builds rover_ros's instrumented/failsafe-off (DCC1000 motor-driver failsafe OFF via
-# the URDF's motor_failsafe_enabled=false, command-path diagnostics, master merged in). A
-# stalled write() loop then leaves the wheels at their last duty command - wheels lifted or
-# low speed, RC E-Stop in reach. Set back to master when done measuring.
+# TEMPORARY: builds rover_ros's instrumented/failsafe-off (command-path diagnostics, 25 Hz control
+# loop, master merged in). The DCC1000 motor-driver failsafe is ENABLED again there
+# (motor_failsafe_enabled=true in the URDF; the branch name is historical). Set back to master
+# when done measuring.
 ARG ROVER_ROS_REF=instrumented/failsafe-off
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}

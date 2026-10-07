@@ -147,10 +147,10 @@ RUN mkdir -p /maps
 # up the latest commit; pin either with --build-arg. rover_ros is cloned only for
 # rover_utils, which rover_mission_manager and rover_navigation depend on - the hardware
 # packages are never built, `--packages-up-to rover_autonomy` stops short of them.
-# TEMPORARY: builds rover_ros's instrumented/failsafe-off (DCC1000 motor-driver failsafe OFF via
-# the URDF's motor_failsafe_enabled=false, command-path diagnostics, master merged in). A
-# stalled write() loop then leaves the wheels at their last duty command - wheels lifted or
-# low speed, RC E-Stop in reach. Set back to master when done measuring.
+# TEMPORARY: builds rover_ros's instrumented/failsafe-off (command-path diagnostics, 25 Hz control
+# loop, master merged in). The DCC1000 motor-driver failsafe is ENABLED again there
+# (motor_failsafe_enabled=true in the URDF; the branch name is historical). Set back to master
+# when done measuring.
 ARG ROVER_ROS_REF=instrumented/failsafe-off
 ARG ROVER_ORCHESTRATOR_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
