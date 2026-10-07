@@ -156,6 +156,11 @@ RUN apt-get update \
 # rosdep key, so it is installed here.
 RUN apt-get update && apt-get install -y dbus-bin \
     && rm -rf /var/lib/apt/lists/*
+# vcgencmd (get_throttled, bootloader_config, pmic_read_adc) for diagnosing the CM5 power supply;
+# balenaOS does not ship it on the host. On Ubuntu 26.04 it is in raspi-utils-core (noble had it
+# in libraspberrypi-bin). It talks to the firmware over /dev/vcio, which this privileged service sees.
+RUN apt-get update && apt-get install -y raspi-utils-core \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/ros2_ws/rover_a1/src/rover_cppuprofile
 RUN cmake -Bbuild . -DPROFILE_ENABLED=ON
