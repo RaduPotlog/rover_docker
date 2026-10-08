@@ -111,9 +111,10 @@ WORKDIR /root/ros2_ws/rover_a1
 # rover_follow_me carries everything follow-me: the FollowTarget contract (rover_follow_me_msgs),
 # the follow_me node that runs following as a Nav 2 FollowObject goal (rover_follow_me_nav2), the
 # algorithms (rover_fmoc) and the launch (rover_follow_me_bringup). The Following server itself
-# runs with Nav 2 in rover-a1-orchestrator. rover_follow_me has a single branch, master
-# (github.com/RaduPotlog/rover_follow_me); pin a commit with --build-arg ROVER_FOLLOW_ME_REF=<sha>.
-ARG ROVER_FOLLOW_ME_REF=master
+# runs with Nav 2 in rover-a1-orchestrator. Pin a commit with --build-arg ROVER_FOLLOW_ME_REF=<sha>.
+# TEMPORARY: feature/rover_follow_me (follow-me through the Nav 2 Following server); set back
+# to master once it is merged.
+ARG ROVER_FOLLOW_ME_REF=feature/rover_follow_me
 RUN git clone https://github.com/RaduPotlog/rover_follow_me.git src/rover_follow_me \
     && git -C src/rover_follow_me checkout ${ROVER_FOLLOW_ME_REF}
 # rover_ros is cloned only for rover_msgs (drive_mode, mission_state); nothing else of it is built

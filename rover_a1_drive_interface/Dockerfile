@@ -24,7 +24,9 @@ RUN apt-get update \
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_DRIVE_INTERFACE_REF=<sha>` for a reproducible build instead.
 # Same convention as ROVER_ROS_REF in the other services.
-ARG ROVER_DRIVE_INTERFACE_REF=master
+# TEMPORARY: feature/rover_follow_me (follow-me through the Nav 2 Following server); set back
+# to master once it is merged.
+ARG ROVER_DRIVE_INTERFACE_REF=feature/rover_follow_me
 RUN git clone https://github.com/RaduPotlog/rover_drive_interface.git /src \
     && git -C /src checkout ${ROVER_DRIVE_INTERFACE_REF}
 

@@ -152,7 +152,9 @@ RUN mkdir -p /maps
 # follow-me. The DCC1000 motor-driver failsafe is ENABLED there (motor_failsafe_enabled=true in
 # the URDF; the failsafe-off name is historical). Set back to master once both are merged.
 ARG ROVER_ROS_REF=feature/rover_follow_me
-ARG ROVER_ORCHESTRATOR_REF=master
+# TEMPORARY: feature/rover_follow_me (follow-me through the Nav 2 Following server); set back
+# to master once it is merged.
+ARG ROVER_ORCHESTRATOR_REF=feature/rover_follow_me
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 RUN git clone https://github.com/RaduPotlog/rover_orchestrator.git src/rover_orchestrator \
