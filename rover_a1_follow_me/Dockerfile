@@ -111,6 +111,8 @@ WORKDIR /root/ros2_ws/rover_a1
 # the VDA 5050 follow master (rover_follow_me_core), the algorithms (rover_fmoc) and the launch
 # (rover_follow_me_bringup). It talks to the rover over MQTT (the VDA 5050 connector in
 # rover-a1-vda5050) and ROS (camera cloud, odom, TF); it needs no other rover repository.
+# rover_follow_me has a single branch, master (github.com/RaduPotlog/rover_follow_me); pin a
+# commit with --build-arg ROVER_FOLLOW_ME_REF=<sha>.
 ARG ROVER_FOLLOW_ME_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_follow_me.git src/rover_follow_me \
     && git -C src/rover_follow_me checkout ${ROVER_FOLLOW_ME_REF}
