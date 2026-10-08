@@ -12,13 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# rover-a1-sensors: the Rover A1 sensor payload (GNSS, lidar) from the rover_sensors repo.
+# rover-a1-sensors: the Rover A1 sensor payload (GNSS, lidar, RealSense camera) from the
+# rover_sensors repo, and the perception on top of it (rover_perception: AprilTag, detection,
+# terrain slope, fmoc person tracking), so camera data never leaves this container.
 #
 # Sibling of rover-a1-platform (base, controller, localization, safety)
-# and rover-a1-orchestrator (Nav 2, mission manager). The payload is kept in its own image so a
-# different GPS or lidar is a change to this image only: its drivers only publish (gps/fix,
-# scan, rslidar_points, diagnostics) and nothing here depends on rover_ros or
-# rover_orchestrator. Joins rover-a1-zenoh-router's Zenoh router over host networking, which is also
+# and rover-a1-orchestrator (Nav 2, mission manager, follow-me). The payload is kept in its own
+# image so a different GPS, lidar or camera is a change to this image only: its nodes only
+# publish (gps/fix, scan, rslidar_points, camera/*, tracked_person, diagnostics). Of rover_ros it
+# needs only the rover_msgs interfaces; nothing depends on rover_orchestrator. Joins rover-a1-zenoh-router's Zenoh router over host networking, which is also
 # what lets the drivers receive the RUTX11 NMEA (UDP 10110) and the RS16 (UDP 6699/7788).
 #
 # Deliberately lean apart from two things. An sshd on 23 (22 is rover-a1-platform's, 24 is
@@ -132,25 +134,42 @@ WORKDIR /root/ros2_ws/rover_a1
 
 # Tracks master by default, so every `--nocache` build picks up the latest commit; pin with
 # --build-arg ROVER_SENSORS_REF=<ref>.
-ARG ROVER_SENSORS_REF=master
+# TEMPORARY: feature/rover_follow_me (rover_realsense: the RealSense driver, moved here from
+# rover_perception); set back to master once it is merged.
+ARG ROVER_SENSORS_REF=feature/rover_follow_me
 RUN git clone https://github.com/RaduPotlog/rover_sensors.git src/rover_sensors \
     && git -C src/rover_sensors checkout ${ROVER_SENSORS_REF}
 
-# Camera and perception nodes (RealSense, depth cloud, AprilTag, YOLO detection, terrain slope);
+# Perception nodes (AprilTag, YOLO detection, terrain slope, fmoc person tracking);
 # rover_sensors_bringup includes its launch file, which does nothing until ROVER_USE_CAMERA /
-# ROVER_USE_TERRAIN is true. Pin with --build-arg ROVER_PERCEPTION_REF=<ref>.
-ARG ROVER_PERCEPTION_REF=master
+# ROVER_USE_TERRAIN / ROVER_START_FOLLOW_ME is true. Pin with --build-arg ROVER_PERCEPTION_REF=<ref>.
+# TEMPORARY: feature/rover_follow_me (RealSense driver moved to rover_sensors, fmoc moved here);
+# set back to master once it is merged.
+ARG ROVER_PERCEPTION_REF=feature/rover_follow_me
 RUN git clone https://github.com/RaduPotlog/rover_perception.git src/rover_perception \
     && git -C src/rover_perception checkout ${ROVER_PERCEPTION_REF}
+
+# rover_ros is cloned only for rover_msgs (TrackedPerson); nothing else of it is built or
+# rosdep-resolved. Keep ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator,
+# rover_a1_vda5050 and here.
+# TEMPORARY: feature/rover_follow_me (adds rover_msgs/TrackedPerson); set back to master once
+# it is merged.
+ARG ROVER_ROS_REF=feature/rover_follow_me
+RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
+    && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 
 RUN vcs import src < src/rover_sensors/sensors_deps.repos
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # apt-get update in the same RUN: the layers above end with `rm -rf /var/lib/apt/lists/*`,
-# and rosdep shells out to a bare `apt-get install` that needs the index.
+# and rosdep shells out to a bare `apt-get install` that needs the index. Everything in src
+# except rover_ros, of which only rover_msgs is built (its hardware and Gazebo dependencies
+# are not wanted here).
 RUN apt-get update \
-    && rosdep install --from-paths src --rosdistro "${ROS_DISTRO}" -y -i \
+    && rosdep install \
+       --from-paths $(find src -mindepth 1 -maxdepth 1 -type d ! -name rover_ros) src/rover_ros/rover_msgs \
+       --rosdistro "${ROS_DISTRO}" -y -i \
     && rm -rf /var/lib/apt/lists/*
 
 # CPU ONNX Runtime for rover_perception_detection (not a rosdep key); ~15 MB, loaded only when

@@ -216,6 +216,10 @@ ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" false)
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
 ROVER_USE_CAMERA=$(norm_bool "${ROVER_USE_CAMERA:-}" false)
+# fmoc person tracking (rover_perception) for follow-me; rover_perception.launch.py reads it from
+# the environment. The follow_me node itself runs in rover-a1-orchestrator.
+ROVER_START_FOLLOW_ME=$(norm_bool "${ROVER_START_FOLLOW_ME:-}" false)
+export ROVER_START_FOLLOW_ME
 
 # With no driver selected the launch has nothing to run and exits at once, so that case is
 # treated as disabled too.
@@ -280,7 +284,7 @@ SENSORS_PID=$!
 set +m
 LAUNCH_PGIDS+=("$SENSORS_PID")
 CHILD_PIDS+=("$SENSORS_PID")
-echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR, camera=$ROVER_USE_CAMERA)"
+echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR, camera=$ROVER_USE_CAMERA, person_tracking=$ROVER_START_FOLLOW_ME)"
 
 # **Supervise** - exit when the launch exits (crash or otherwise), so docker-compose's
 # `restart: always` (Balena) brings the drivers back up cleanly.

@@ -237,6 +237,9 @@ ROVER_NAV_USE_CAMERA=$(norm_bool "${ROVER_NAV_USE_CAMERA:-}" false)
 ROVER_USE_CAMERA=$(norm_bool "${ROVER_USE_CAMERA:-}" false)
 # true only when the platform is rover_gazebo (Gazebo publishes /clock); never on the rover.
 ROVER_USE_SIM_TIME=$(norm_bool "${ROVER_USE_SIM_TIME:-}" false)
+# Follow-me (rover_follow_me): the follow_me node runs here, next to Nav 2's Following server;
+# the same variable starts the fmoc person tracker in rover-a1-sensors. Needs navigation.
+ROVER_START_FOLLOW_ME=$(norm_bool "${ROVER_START_FOLLOW_ME:-}" false)
 
 # The orchestrator stack runs on this device only when navigation is requested here AND the
 # platform bringup it drives is actually running. To run the stack on a companion controller
@@ -433,6 +436,31 @@ else
   echo "Mission manager disabled (ROVER_START_MISSION_MANAGER=false); Nav 2 only"
 fi
 
+# **Follow-me - Background**
+# Only reached with navigation running: the follow_me node drives through the Following server
+# in rover_navigation's bringup. It reads drive_mode and mission_state; AUTOMATIC (which
+# follow-me needs) is only reachable with the mission manager up.
+if [ "$ROVER_START_FOLLOW_ME" = true ]; then
+  if [ "$ROVER_START_MISSION_MANAGER" != true ]; then
+    echo "WARNING: ROVER_START_FOLLOW_ME=true with ROVER_START_MISSION_MANAGER=false - drive mode cannot reach AUTOMATIC, so follow_me/start will be refused"
+  fi
+  if [ "$ROVER_USE_CAMERA" != true ] && [ "$ROVER_USE_SIM_TIME" != true ]; then
+    echo "WARNING: ROVER_START_FOLLOW_ME=true with ROVER_USE_CAMERA=false - no depth cloud for the person tracker in rover-a1-sensors, so no person is ever tracked"
+  fi
+  set -m  # own process group, so stop_launch_groups can signal its nodes
+  nohup ros2 launch rover_follow_me rover_follow_me.launch.py \
+    use_sim_time:="${ROVER_USE_SIM_TIME}" \
+    "${NAMESPACE_ARG[@]}" \
+    > >(rotating_log /tmp/rover_follow_me.log "$ROVER_LOG_MAX_BYTES" "$ROVER_LOG_BACKUP_COUNT") 2>&1 < /dev/null &
+  FOLLOW_ME_PID=$!
+  set +m
+  LAUNCH_PGIDS+=("$FOLLOW_ME_PID")
+  CHILD_PIDS+=("$FOLLOW_ME_PID")
+  echo "Follow-me started in background (PID: $FOLLOW_ME_PID)"
+else
+  echo "Follow-me disabled (ROVER_START_FOLLOW_ME=false)"
+fi
+
 # **Supervise** - block until the first of the supervised processes exits (crash or
 # otherwise), then tear down everything else and exit so docker-compose's `restart: always`
 # (Balena) brings the whole stack back up cleanly.
@@ -449,6 +477,9 @@ if [ "$START_DRIVE_MODE" = true ]; then
 fi
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
   STATUS_ENTRIES+=("rover_mission_manager:$MISSION_PID")
+fi
+if [ "$ROVER_START_FOLLOW_ME" = true ]; then
+  STATUS_ENTRIES+=("rover_follow_me:$FOLLOW_ME_PID")
 fi
 
 for entry in "${STATUS_ENTRIES[@]}"; do

@@ -16,11 +16,10 @@ service's build context in `docker-compose.yml`:
 |--------------------|---------------------|----------------------------------------------------------------------------|
 | `rover-a1-zenoh-router`  | `rover_a1_zenoh_router/`  | Ubuntu 26.04 + `rmw_zenoh_cpp` only: the Zenoh router (`rmw_zenohd`) on 7447 that every ROS process connects to, as the container's only process. Its own service so platform restarts and releases leave the ROS graph up. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh) |
 | `rover-a1-platform`      | `rover_a1_platform/`      | Ubuntu 26.04 + ROS 2 Lyrical + rover firmware (sshd, `rover_bringup`, rosbridge, foxglove_bridge); `start.sh` is the entrypoint |
-| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager`), plus an sshd on port 24 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
-| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
+| `rover-a1-orchestrator` | `rover_a1_orchestrator/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_orchestrator`](https://github.com/RaduPotlog/rover_orchestrator) — the autonomy stack (Nav 2 via `rover_navigation`, plus `rover_mission_manager` and follow-me's `rover_follow_me`), plus an sshd on port 24 and the Claude Code CLI with `ros-mcp` registered; `start.sh` is the entrypoint. Idle unless enabled, see [Where the orchestrator runs](#where-the-orchestrator-runs) |
+| `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`), RoboSense RS16 lidar driver (`scan`, `rslidar_points`) and RealSense D435i driver (`camera/*`), with their diagnostics, and [`rover_perception`](https://github.com/RaduPotlog/rover_perception) on top of them (AprilTag, detection, terrain slope, fmoc person tracking), plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25 and the Claude Code CLI with `ros-mcp` registered. See [Drive interface](#drive-interface) |
 | `rover-a1-vda5050` | `rover_a1_vda5050/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_vda5050`](https://github.com/RaduPotlog/rover_vda5050) — the VDA 5050 2.0 fleet interface (InOrbit's MQTT connector, vendored, driving the rover through `rover_mission_manager`), an optional Mosquitto broker (1883, WebSockets 9001), plus an sshd on port 26 and the Claude Code CLI with `ros-mcp` registered. Idle unless enabled, see [VDA 5050](#vda-5050) |
-| `rover-a1-follow-me` | `rover_a1_follow_me/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_follow_me`](https://github.com/RaduPotlog/rover_follow_me) — follow-me: an algorithm tracks a person (`fmoc`: ADBSCAN on the RealSense depth cloud) and the `follow_me` node runs following as a goal of Nav 2's Following server (in `rover-a1-orchestrator`), plus an sshd on port 27 and the Claude Code CLI with `ros-mcp` registered. Never publishes `cmd_vel`. Idle unless enabled, see [Follow-me](#follow-me) |
 | `rover-a1-network` | `rover_a1_network/` | Python + [`rover_networking`](https://github.com/RaduPotlog/rover_networking) (`rutx11/`): web page on port 5080 (behind a login) that switches the RUTX11's Wi-Fi uplink in place and keeps the router's firewall/NAT consistent (no ROS, no sshd). See [Network uplink page](#network-uplink-page) |
 
 ```
@@ -180,7 +179,6 @@ All containers use host networking, so these bind directly to the device:
 | 24     | sshd (`rover-a1-orchestrator`)       |
 | 25     | sshd (`rover-a1-drive-interface`)    |
 | 26     | sshd (`rover-a1-vda5050`)            |
-| 27     | sshd (`rover-a1-follow-me`)          |
 | 1883   | MQTT, VDA 5050 (`rover-a1-vda5050`'s Mosquitto, with `ROVER_VDA5050_LOCAL_BROKER=true`; anonymous, LAN only) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 5080   | Network page: switch the router's Wi-Fi uplink (`rover-a1-network`, plain http, basic-auth login) |
@@ -421,8 +419,7 @@ See [VDA 5050](#vda-5050) for what the interface supports.
 
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
-| `ROVER_START_FOLLOW_ME` | `false` | follow-me | `true` starts follow-me (`fmoc` and the `follow_me` node). Following drives through Nav 2's Following server, so it needs `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true` on the orchestrator (AUTOMATIC needs the mission manager); the container warns when either is off. |
-| `ROVER_FOLLOW_ME_ALGO` | `fmoc` | follow-me | The follow-me algorithm. `fmoc` (follow-me on camera) needs `ROVER_USE_CAMERA=true` and the depth cloud (`ROVER_CAMERA_DEPTH_CLOUD`, on by default). |
+| `ROVER_START_FOLLOW_ME` | `false` | sensors, orchestrator | `true` starts follow-me: the `fmoc` person tracker in `rover-a1-sensors` (needs `ROVER_USE_CAMERA=true` and the depth cloud, `ROVER_CAMERA_DEPTH_CLOUD`, on by default) and the `follow_me` node in `rover-a1-orchestrator`. Following drives through Nav 2's Following server, so it needs `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true` (AUTOMATIC needs the mission manager); the orchestrator warns when the mission manager or the camera is off. |
 
 See [Follow-me](#follow-me).
 
@@ -435,9 +432,9 @@ See [Follow-me](#follow-me).
 | `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF; it publishes `map → odom` only with `ROVER_GPS_PUBLISH_MAP_TF=true`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
 | `ROVER_GPS_PUBLISH_MAP_TF` | `false` | platform, orchestrator | Only matters with `ROVER_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
 | `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
-| `ROVER_USE_CAMERA` | `false` | sensors, orchestrator | Starts the RealSense D435i driver and the camera perception nodes in `rover-a1-sensors` (see [rover_perception](../src/rover_perception/README.md)), and publishes its depth cloud (`camera/depth/points`). It does not change Nav 2: the cloud joins the costmap only with `ROVER_NAV_USE_CAMERA`; the orchestrator reads this variable just to warn about that combination. Counts as a driver for `ROVER_START_SENSORS`, so a camera-only payload does not idle. Needs USB access to the camera in the container. |
+| `ROVER_USE_CAMERA` | `false` | sensors, orchestrator | Starts the RealSense D435i driver (`rover_sensors`' `rover_realsense`) and the camera perception nodes in `rover-a1-sensors` (see [rover_perception](../src/rover_perception/README.md)), and publishes its depth cloud (`camera/depth/points`). It does not change Nav 2: the cloud joins the costmap only with `ROVER_NAV_USE_CAMERA`; the orchestrator reads this variable just to warn about that combination. Counts as a driver for `ROVER_START_SENSORS`, so a camera-only payload does not idle. Needs USB access to the camera in the container. |
 | `ROVER_NAV_USE_CAMERA` | `false` | orchestrator | Adds the depth cloud (`camera/depth/points`) as a second source of the **local** Nav 2 costmap. Needs `ROVER_USE_CAMERA=true` (the orchestrator warns otherwise). Leave it off until the camera mount (`ROVER_CAMERA_*`) is measured: with a wrong mount the camera marks obstacles in the wrong place. `false` keeps the lidar scan as the only source. |
-| `ROVER_CAMERA_DEPTH_CLOUD` | `true` | sensors | With `ROVER_USE_CAMERA=true`: publish the depth image as a `PointCloud2` (`camera/depth/points`), for the costmap with `ROVER_NAV_USE_CAMERA` (CPU only). |
+| `ROVER_CAMERA_DEPTH_CLOUD` | `true` | sensors | With `ROVER_USE_CAMERA=true`: publish the depth image as a `PointCloud2` (`camera/depth/points`), for the costmap with `ROVER_NAV_USE_CAMERA` and for follow-me's person tracker (CPU only). |
 | `ROVER_CAMERA_FIDUCIALS` | `false` | sensors | With `ROVER_USE_CAMERA=true`: AprilTag (36h11) detection on the colour stream. The tag size in `rover_perception_bringup/config/apriltag.yaml` is an assumption until measured. |
 | `ROVER_CAMERA_DETECTION` | `false` | sensors | With `ROVER_USE_CAMERA=true`: YOLO object detection on the colour stream (`detections`, `vision_msgs/Detection2DArray`). Needs `ROVER_CAMERA_DETECTION_MODEL`. |
 | `ROVER_CAMERA_DETECTION_MODEL` | *(unset)* | sensors | Path inside the container of a YOLOv8/v11 `.onnx` file, for example on a volume. Without it the detector refuses to configure and logs why. |
@@ -550,10 +547,11 @@ The rover's broker is anonymous and unencrypted: fine on the rover LAN, not beyo
 
 ## Follow-me
 
-`rover-a1-follow-me` runs [`rover_follow_me`](https://github.com/RaduPotlog/rover_follow_me): a
-follow-me algorithm tracks a person (`fmoc`, a Python port of Intel's ADBSCAN follow-me clustering
-on the RealSense depth cloud), and the `follow_me` node runs following as one `FollowObject` goal
-of Nav 2's Following server, which runs with Nav 2 in `rover-a1-orchestrator`. The server keeps
+Follow-me spans two containers, by layer. In `rover-a1-sensors`, `rover_perception`'s `fmoc` tracks
+a person (a Python port of Intel's ADBSCAN follow-me clustering on the RealSense depth cloud) and
+publishes `tracked_person`, so the depth cloud never leaves the container. In
+`rover-a1-orchestrator`, `rover_orchestrator`'s `rover_follow_me` runs following as one
+`FollowObject` goal of Nav 2's Following server, next to Nav 2 and the mission manager. The server keeps
 1.2 m from the person, turning to face them, and its velocity goes through the velocity smoother,
 the collision monitor, drive mode and the motion lock like any Nav 2 motion; follow-me never
 publishes `cmd_vel`.
@@ -565,7 +563,9 @@ following from the drive UI (Navigate tab, *Follow me*), with the VDA 5050 insta
 `ros2 service call /rover/follow_me/start std_srvs/srv/Trigger`. Following stops on
 `follow_me/stop` (or `stopFollowing`), when the rover leaves Automatic, when a mission starts, and
 when the Following server gives up searching for a lost person. `follow_me/status` says what it is
-doing. SSH: `ssh -p 27 root@<rover-lan-ip>`; logs in `/tmp/rover_follow_me.log`.
+doing. Logs: the `follow_me` node in `/tmp/rover_follow_me.log` on the orchestrator
+(`ssh -p 24 root@<rover-lan-ip>`), `fmoc` in `/tmp/rover_sensors.log` on the sensors container
+(`ssh -p 23`).
 
 ## ROS namespace
 
