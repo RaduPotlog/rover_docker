@@ -20,6 +20,7 @@ service's build context in `docker-compose.yml`:
 | `rover-a1-sensors` | `rover_a1_sensors/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_sensors`](https://github.com/RaduPotlog/rover_sensors) — the sensor payload: RUTX11 GNSS driver (`gps/fix`) and RoboSense RS16 lidar driver (`scan`, `rslidar_points`), with their diagnostics, plus an sshd on port 23 and the Claude Code CLI with `ros-mcp` registered. Drivers only publish, so a different sensor changes this image only; `start.sh` is the entrypoint |
 | `rover-a1-drive-interface` | `rover_a1_drive_interface/` | nginx + [`rover_drive_interface`](https://github.com/RaduPotlog/rover_drive_interface) — Boxer / IndoorNav-style drive UI on port 5000 behind a login; nginx proxies `/ws` to foxglove_bridge (no ROS inside). Plus an sshd on port 25 and the Claude Code CLI with `ros-mcp` registered. See [Drive interface](#drive-interface) |
 | `rover-a1-vda5050` | `rover_a1_vda5050/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_vda5050`](https://github.com/RaduPotlog/rover_vda5050) — the VDA 5050 2.0 fleet interface (InOrbit's MQTT connector, vendored, driving the rover through `rover_mission_manager`), an optional Mosquitto broker (1883, WebSockets 9001), plus an sshd on port 26 and the Claude Code CLI with `ros-mcp` registered. Idle unless enabled, see [VDA 5050](#vda-5050) |
+| `rover-a1-follow-me` | `rover_a1_follow_me/` | Ubuntu 26.04 + ROS 2 Lyrical + [`rover_follow_me`](https://github.com/RaduPotlog/rover_follow_me) — follow-me: an algorithm tracks a person (`fmoc`: ADBSCAN on the RealSense depth cloud) and a VDA 5050 master turns their path into orders for `rover-a1-vda5050`, plus an sshd on port 27 and the Claude Code CLI with `ros-mcp` registered. Never publishes `cmd_vel`. Idle unless enabled, see [Follow-me](#follow-me) |
 | `rover-a1-network` | `rover_a1_network/` | Python + [`rover_networking`](https://github.com/RaduPotlog/rover_networking) (`rutx11/`): web page on port 5080 (behind a login) that switches the RUTX11's Wi-Fi uplink in place and keeps the router's firewall/NAT consistent (no ROS, no sshd). See [Network uplink page](#network-uplink-page) |
 
 ```
@@ -179,6 +180,7 @@ All containers use host networking, so these bind directly to the device:
 | 24     | sshd (`rover-a1-orchestrator`)       |
 | 25     | sshd (`rover-a1-drive-interface`)    |
 | 26     | sshd (`rover-a1-vda5050`)            |
+| 27     | sshd (`rover-a1-follow-me`)          |
 | 1883   | MQTT, VDA 5050 (`rover-a1-vda5050`'s Mosquitto, with `ROVER_VDA5050_LOCAL_BROKER=true`; anonymous, LAN only) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
 | 5080   | Network page: switch the router's Wi-Fi uplink (`rover-a1-network`, plain http, basic-auth login) |
@@ -415,6 +417,15 @@ Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 
 See [VDA 5050](#vda-5050) for what the interface supports.
 
+### Follow-me
+
+| Variable | Default | Read by | Effect |
+|----------|---------|---------|--------|
+| `ROVER_START_FOLLOW_ME` | `false` | follow-me | `true` starts follow-me. It is VDA 5050 master control on the connector's broker with the connector's identity (`ROVER_VDA5050_BROKER_*`, `_MANUFACTURER`, `_SERIAL_NUMBER`, `_MAP_FRAME`), so it also needs `ROVER_START_VDA5050=true` and everything that needs. Plain MQTT only: with a broker user and TLS on it idles. |
+| `ROVER_FOLLOW_ME_ALGO` | `fmoc` | follow-me | The follow-me algorithm. `fmoc` (follow-me on camera) needs `ROVER_USE_CAMERA=true` and the depth cloud (`ROVER_CAMERA_DEPTH_CLOUD`, on by default). |
+
+See [Follow-me](#follow-me).
+
 ### Robot configuration
 
 | Variable | Default | Read by | Effect |
@@ -535,6 +546,26 @@ on the rover's broker (port 1883), or on its own broker with `ROVER_VDA5050_LOCA
 `/tmp/rover_vda5050.log`, Mosquitto to `/tmp/rover_mosquitto.log`.
 
 The rover's broker is anonymous and unencrypted: fine on the rover LAN, not beyond it.
+
+## Follow-me
+
+`rover-a1-follow-me` runs [`rover_follow_me`](https://github.com/RaduPotlog/rover_follow_me): a
+follow-me algorithm tracks a person, and a VDA 5050 master control sends `rover-a1-vda5050`'s
+connector one order per follow session, extended one breadcrumb at a time along the path the
+person walked. Nav 2 drives it like any order (planner, costmaps, collision monitor); follow-me
+never publishes `cmd_vel`. The default algorithm, `fmoc`, is a Python port of Intel's ADBSCAN
+follow-me clustering on the RealSense depth cloud.
+
+Enable it with `ROVER_START_FOLLOW_ME=true` and `ROVER_USE_CAMERA=true` on a rover that runs VDA
+5050 (above) and is in Automatic. Stand 1.5 m in front of the stopped rover until
+`/rover/follow_me/target` reports TRACKING, then
+`ros2 service call /rover/follow_me/start std_srvs/srv/Trigger`; `follow_me/stop` cancels the
+order, and so does losing sight of you for 3 s. `follow_me/status` says what it is doing. Walk at
+an easy pace: the rover stops briefly at every breadcrumb. SSH: `ssh -p 27 root@<rover-lan-ip>`;
+logs in `/tmp/rover_follow_me.log`.
+
+Only one master control may drive the rover at a time: follow-me refuses to start while another
+order is active, but nothing stops a fleet manager (RMF) from sending one while it follows.
 
 ## ROS namespace
 

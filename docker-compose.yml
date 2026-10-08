@@ -42,7 +42,8 @@ version: '2.4'
 #                              own it); orchestrator: localization_source checks
 # ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
 # ROVER_USE_CAMERA             sensors: RealSense driver + perception nodes; orchestrator: adds the
-#                              camera depth source to the Nav 2 costmaps (default false)
+#                              camera depth source to the Nav 2 costmaps; follow-me: fmoc needs it
+#                              (default false)
 # ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam | amcl | indoor, overrides ROVER_USE_GPS;
 #                              indoor = drive-UI mapping + maps in /maps (rover_indoor_nav_manager);
 #                              sensors: indoor/slam/amcl make poor GNSS accuracy a WARN, not an ERROR
@@ -64,6 +65,13 @@ version: '2.4'
 #                              manufacturer + serial number (MQTT topic levels),
 #                              Nav 2 frame of the order coordinates (unset = odom or map, following
 #                              the orchestrator's localization source)
+# ROVER_START_FOLLOW_ME        follow-me: run follow-me (default false). A person standing 1.5 m in
+#                              front of the stopped rover is picked up; `ros2 service call
+#                              /<ns>/follow_me/start std_srvs/srv/Trigger` starts following. Needs
+#                              ROVER_START_VDA5050 (it sends VDA 5050 orders to that connector, on
+#                              its broker and identity, ROVER_VDA5050_*: plain MQTT only), the
+#                              mission manager, AUTOMATIC drive mode and, for fmoc, ROVER_USE_CAMERA
+# ROVER_FOLLOW_ME_ALGO         follow-me: the follow-me algorithm (default fmoc: follow-me on camera)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (its own
 # service, rover-a1-zenoh-router, so it keeps running while the others restart), and the sensors
@@ -147,6 +155,8 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
     healthcheck:
       # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
@@ -242,6 +252,8 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
@@ -323,6 +335,8 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -410,6 +424,8 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
   rover-a1-drive-interface:
     build:
       context: ./rover_a1_drive_interface
@@ -478,6 +494,8 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
     healthcheck:
       # Script in the image (reads ROVER_DRIVE_PORT); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
@@ -560,9 +578,98 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
     healthcheck:
       # Script in the image (TCP connect to the local broker when there is one); no `$` here,
       # (balena's compose parser mangles `$$`).
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  # Follow-me (repo github.com/RaduPotlog/rover_follow_me): a follow-me algorithm tracks a person
+  # (fmoc: the RealSense depth cloud) and the follow master turns their path into VDA 5050 orders
+  # for rover-a1-vda5050's connector, so Nav 2 drives as for any order. Never publishes cmd_vel.
+  # Idle unless ROVER_START_FOLLOW_ME=true.
+  rover-a1-follow-me:
+    build:
+      context: ./rover_a1_follow_me
+    # Start order only; start.sh still waits until the router accepts connections.
+    depends_on:
+      - rover-a1-zenoh-router
+    restart: always
+    network_mode: host
+    environment:
+      ROVER_NAMESPACE: 'rover'
+      ROVER_ZENOH_MODE: 'client'
+      ROVER_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_START_ROS_PLATFORM: 'true'
+      ROVER_START_NAVIGATION: 'false'
+      ROVER_START_MISSION_MANAGER: 'false'
+      ROVER_START_DRIVE_MODE: 'true'
+      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_START_SENSORS: 'false'
+      ROVER_USE_GPS: 'false'
+      ROVER_GPS_PUBLISH_MAP_TF: 'false'
+      ROVER_USE_LIDAR: 'false'
+      ROVER_USE_CAMERA: 'false'
+      ROVER_LOCALIZATION_SOURCE:
+      ROVER_NAV_MAP:
+      ROVER_AMCL_INITIAL_POSE_X:
+      ROVER_AMCL_INITIAL_POSE_Y:
+      ROVER_AMCL_INITIAL_POSE_YAW:
+      ROVER_GPS_LOCALIZATION_X:
+      ROVER_GPS_LOCALIZATION_Y:
+      ROVER_GPS_LOCALIZATION_Z:
+      ROVER_GPS_ORIENTATION_R:
+      ROVER_GPS_ORIENTATION_P:
+      ROVER_GPS_ORIENTATION_Y:
+      ROVER_IMU_LOCALIZATION_X:
+      ROVER_IMU_LOCALIZATION_Y:
+      ROVER_IMU_LOCALIZATION_Z:
+      ROVER_IMU_ORIENTATION_R:
+      ROVER_IMU_ORIENTATION_P:
+      ROVER_IMU_ORIENTATION_Y:
+      ROVER_LIDAR_LOCALIZATION_X:
+      ROVER_LIDAR_LOCALIZATION_Y:
+      ROVER_LIDAR_LOCALIZATION_Z:
+      ROVER_LIDAR_ORIENTATION_R:
+      ROVER_LIDAR_ORIENTATION_P:
+      ROVER_LIDAR_ORIENTATION_Y:
+      ROVER_CAMERA_LOCALIZATION_X:
+      ROVER_CAMERA_LOCALIZATION_Y:
+      ROVER_CAMERA_LOCALIZATION_Z:
+      ROVER_CAMERA_ORIENTATION_R:
+      ROVER_CAMERA_ORIENTATION_P:
+      ROVER_CAMERA_ORIENTATION_Y:
+      ROVER_DRIVE_ENABLE: 'true'
+      ROVER_DRIVE_PORT: '5000'
+      ROVER_DRIVE_USER: 'rover'
+      ROVER_DRIVE_PASSWORD:
+      ROVER_DRIVE_MAX_LINEAR: '1.0'
+      ROVER_DRIVE_MAX_ANGULAR: '1.0'
+      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
+      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
+      ROVER_DRIVE_EXPO_LINEAR: '0.3'
+      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
+      ROVER_START_VDA5050: 'false'
+      ROVER_VDA5050_LOCAL_BROKER: 'true'
+      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
+      ROVER_VDA5050_BROKER_PORT: '1883'
+      ROVER_VDA5050_BROKER_USER:
+      ROVER_VDA5050_BROKER_PASSWORD:
+      ROVER_VDA5050_BROKER_TLS: 'auto'
+      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
+      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
+      ROVER_VDA5050_MAP_FRAME:
+      ROVER_START_FOLLOW_ME: 'false'
+      ROVER_FOLLOW_ME_ALGO: 'fmoc'
+    healthcheck:
+      # Script in the image (TCP connect to the VDA 5050 broker); no `$` here (balena's compose
+      # parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
