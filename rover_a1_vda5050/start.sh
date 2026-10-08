@@ -161,12 +161,12 @@ terminate_children() {
 trap 'terminate_children; exit 0' TERM INT
 
 # **SSHD background (keep alive)** - before the enable gate, so a shell is available while the
-# container idles. Port 27 (image's sshd_config drop-in): platform 22, sensors 23,
-# orchestrator 24, drive-interface 25, cockpit 26, vda5050 27.
+# container idles. Port 26 (image's sshd_config drop-in): platform 22, sensors 23,
+# orchestrator 24, drive-interface 25, vda5050 26 (cockpit would take 27).
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
-echo "sshd started on port 27 (PID: $SSHD_PID)"
+echo "sshd started on port 26 (PID: $SSHD_PID)"
 
 # **Zenoh session mode** - client unless ROVER_ZENOH_MODE=peer, as in rover-a1-orchestrator
 # (see its start.sh for why runtime-started groups are clients).
@@ -200,7 +200,7 @@ ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them.
 if [ "$ROVER_START_VDA5050" != true ]; then
-  echo "VDA 5050 disabled (ROVER_START_VDA5050=false); idling (sshd on 27 stays up)"
+  echo "VDA 5050 disabled (ROVER_START_VDA5050=false); idling (sshd on 26 stays up)"
   # Not `exec sleep infinity`: exec would drop the TERM trap and orphan sshd.
   wait "$SSHD_PID" || true
   terminate_children

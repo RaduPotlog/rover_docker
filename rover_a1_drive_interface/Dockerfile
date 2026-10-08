@@ -48,7 +48,7 @@ RUN apt-get update \
 
 # Same arrangement as rover-a1-orchestrator / rover-a1-sensors: root password login through
 # an sshd_config.d drop-in, only the port differs - 25, because host networking shares one
-# port space: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
+# port space: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 27.
 # Debian's stock sshd_config starts with `Include /etc/ssh/sshd_config.d/*.conf`, and the
 # package's postinst generates the host keys. See README.md "Drive interface SSH".
 RUN apt-get update \

@@ -53,7 +53,7 @@ version: '2.4'
 #                              frame; unset = 0,0,0, correct only if the map origin is the dock
 # ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
 #                              body_link; unset = URDF default
-# ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit-ws is not started (sshd on 26 stays up)
+# ROVER_COCKPIT_*              cockpit: http port, login, allowed origins and debug logging; no password = cockpit-ws is not started (sshd on 27 stays up)
 # ROVER_DRIVE_*                drive-interface: on/off, http port, login, teleop speed limits (m/s, rad/s),
 #                              rim-speed limit + track width (keep equal to rover_crsf_teleop.yaml),
 #                              stick expo per axis (0 linear .. 1 softest);
@@ -261,7 +261,7 @@ services:
       - rover-a1-zenoh-router
     restart: always
     # Its sshd listens on 24 (one SSH port per container in the shared host network: platform 22,
-    # sensors 23, orchestrator 24, drive-interface 25, cockpit 26).
+    # sensors 23, orchestrator 24, drive-interface 25, cockpit 27).
     network_mode: host
     # map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and
     # localization_source=amcl reads it back through ROVER_NAV_MAP. A named volume, not a bind
@@ -346,7 +346,7 @@ services:
     depends_on:
       - rover-a1-zenoh-router
     restart: always
-    # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 26.
+    # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 27.
     network_mode: host
     # The RealSense D435i enumerates under /dev/bus/usb and /dev/video*, and re-enumerates on
     # every re-plug, so a fixed `devices:` list would not follow it. Same approach as the
@@ -600,7 +600,7 @@ services:
 
   # VDA 5050 fleet interface: InOrbit's connector + rover_vda5050_adapter (rover_vda5050), driving
   # through rover_mission_manager in rover-a1-orchestrator. Idle unless ROVER_START_VDA5050=true.
-  # Runs its own Mosquitto (1883, WebSockets 9001) with ROVER_VDA5050_LOCAL_BROKER=true; sshd on 27.
+  # Runs its own Mosquitto (1883, WebSockets 9001) with ROVER_VDA5050_LOCAL_BROKER=true; sshd on 26.
   rover-a1-vda5050:
     build:
       context: ./rover_a1_vda5050

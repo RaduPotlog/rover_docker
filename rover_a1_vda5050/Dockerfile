@@ -18,7 +18,7 @@
 # -> rover_vda5050_adapter -> rover_mission_manager (rover-a1-orchestrator) -> Nav 2. Plus a
 # Mosquitto broker for master controls that bring none (ROVER_VDA5050_LOCAL_BROKER). Like the
 # other ROS services it joins rover-a1-zenoh-router over host networking, runs an sshd on its own
-# port (27) and carries the Claude Code / ros-mcp tooling for parity with them.
+# port (26) and carries the Claude Code / ros-mcp tooling for parity with them.
 FROM ubuntu:26.04
 
 # Avoid interactive prompts during build
@@ -34,20 +34,20 @@ RUN apt-get update && apt-get install -y \
 
 # Above the workspace layers, which are the expensive ones (see rover_a1_orchestrator).
 #
-# Port 27, not 22: every service in docker-compose.yml is network_mode: host, so they share
+# Port 26, not 22: every service in docker-compose.yml is network_mode: host, so they share
 # one port space and each sshd gets its own port - platform 22, sensors 23, orchestrator 24,
-# drive-interface 25, cockpit 26, vda5050 27.
+# drive-interface 25, vda5050 26 (cockpit would take 27).
 RUN apt-get update && apt-get install -y openssh-server \
     && mkdir -p /var/run/sshd \
     && rm -rf /var/lib/apt/lists/*
 
 # Root password login, the same arrangement as rover-a1-platform and rover-a1-orchestrator.
 RUN echo 'root:root' | chpasswd \
-    && printf 'Port 27\nPermitRootLogin yes\nUsePAM no\n' \
+    && printf 'Port 26\nPermitRootLogin yes\nUsePAM no\n' \
        > /etc/ssh/sshd_config.d/rover_vda5050.conf
 
 # Documentation only - host networking ignores EXPOSE. 1883/9001: Mosquitto (MQTT / WebSockets).
-EXPOSE 27 1883 9001
+EXPOSE 26 1883 9001
 
 ##################################### MQTT broker ########################################
 

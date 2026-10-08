@@ -202,8 +202,8 @@ All containers use host networking, so these bind directly to the device:
 | 23     | sshd (`rover-a1-sensors`)            |
 | 24     | sshd (`rover-a1-orchestrator`)       |
 | 25     | sshd (`rover-a1-drive-interface`)    |
-| 26     | sshd (`rover-cockpit`)               |
-| 27     | sshd (`rover-a1-vda5050`)            |
+| 26     | sshd (`rover-a1-vda5050`)            |
+| 27     | sshd (`rover-cockpit`, retired; slot reserved) |
 | 80     | Cockpit: ROS 2 Diagnostics / Networking / LEDs (`rover-cockpit`, plain http) |
 | 1883   | MQTT, VDA 5050 (`rover-a1-vda5050`'s Mosquitto, with `ROVER_VDA5050_LOCAL_BROKER=true`; anonymous, LAN only) |
 | 5000   | Drive interface (`rover-a1-drive-interface`, plain http, basic-auth login; `/ws` is proxied to 8765) |
@@ -218,8 +218,8 @@ All containers use host networking, so these bind directly to the device:
 | 48484  | balena supervisor              |
 
 Host networking gives every container a single port space, so each sshd has its own port —
-platform **22**, sensors **23**, orchestrator **24**, drive-interface **25**, cockpit **26**,
-vda5050 **27**.
+platform **22**, sensors **23**, orchestrator **24**, drive-interface **25**, vda5050 **26**,
+(cockpit, retired, would take **27**).
 No ROS container runs a Zenoh router of its own: they all join `rover-a1-zenoh-router` on 7447 (see
 [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)).
 
@@ -238,7 +238,7 @@ ssh root@<rover-lan-ip>             # 22  platform: drivers, bringup, web bridge
 ssh -p 23 root@<rover-lan-ip>       # 23  sensors: GNSS + lidar drivers
 ssh -p 24 root@<rover-lan-ip>       # 24  orchestrator: Nav 2 + mission manager
 ssh -p 25 root@<rover-lan-ip>       # 25  drive interface: nginx
-ssh -p 26 root@<rover-lan-ip>       # 26  cockpit
+ssh -p 26 root@<rover-lan-ip>       # 26  vda5050: VDA 5050 connector + Mosquitto
 ```
 
 `start.sh` starts sshd ahead of the enable/disable gate, so the container is reachable even
@@ -265,7 +265,7 @@ clear the old entry with `ssh-keygen -R '[<rover-lan-ip>]:<port>'` (plain `<rove
 Every image carries the same Claude tooling: the `@anthropic-ai/claude-code` CLI plus `ros-mcp`
 (with the `fastmcp<4` pin), registered at user scope at build time. So `claude` works
 identically on all five SSH shells: platform 22, sensors 23, orchestrator 24,
-drive-interface 25 and cockpit 26. Use the shell of the container you are debugging:
+drive-interface 25 and cockpit 27. Use the shell of the container you are debugging:
 - port 24 for Nav 2, the costmaps or the mission manager;
 - port 23 for the GNSS or lidar payload;
 - port 22 for the drivers and bringup.
@@ -302,7 +302,7 @@ others. It is a root maintenance shell, separate from Cockpit's own web login
 (`ROVER_COCKPIT_USER` on port 80, which refuses root).
 
 ```bash
-ssh -p 26 root@<rover-lan-ip>       # cockpit: cockpit-ws, /etc/cockpit, the private D-Bus
+ssh -p 27 root@<rover-lan-ip>       # cockpit: cockpit-ws, /etc/cockpit, the private D-Bus
 ```
 
 `start.sh` starts sshd first and supervises it together with `cockpit-ws`; if either exits the
@@ -331,7 +331,7 @@ opens directly. It replaces the former `rover-web-server` dashboard. It has thre
   Any logged-in Cockpit user can use them.
 
 - **Login:** set the balenaCloud service variable `ROVER_COCKPIT_PASSWORD` for
-  `rover-cockpit` (required — without it the container idles with only sshd on 26). The user name is
+  `rover-cockpit` (required — without it the container idles with only sshd on 27). The user name is
   `ROVER_COCKPIT_USER` (default `rover`; `root` is refused). Both are re-applied on
   every container start.
 - **Data path:** the page runs in the browser, but it does not connect to
@@ -551,7 +551,7 @@ warning in `/tmp/rover_bringup.log`.
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
 | `ROVER_COCKPIT_USER` | `rover` | cockpit | Cockpit login user. `root` is refused. |
-| `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — without it `cockpit-ws` is not started and the container idles (sshd on 26 only), logging an error. |
+| `ROVER_COCKPIT_PASSWORD` | *(unset)* | cockpit | Required — without it `cockpit-ws` is not started and the container idles (sshd on 27 only), logging an error. |
 | `ROVER_COCKPIT_PORT` | `80` | cockpit | Port the Cockpit web console binds (plain http). |
 | `ROVER_COCKPIT_DEBUG` | `false` | cockpit | `true` = verbose cockpit-ws / session / bridge logging in the container log (`G_MESSAGES_DEBUG`, `COCKPIT_DEBUG`), to see why a session was closed. Very chatty; leave off normally. |
 
@@ -626,7 +626,7 @@ Enable it with `ROVER_START_VDA5050=true` on a rover that also runs
 `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`, then put the rover in
 Automatic from the drive UI. Master control publishes to `uagv/v2/<manufacturer>/<serial>/order`
 on the rover's broker (port 1883), or on its own broker with `ROVER_VDA5050_LOCAL_BROKER=false` and
-`ROVER_VDA5050_BROKER_HOST`. SSH: `ssh -p 27 root@<rover-lan-ip>`; the connector logs to
+`ROVER_VDA5050_BROKER_HOST`. SSH: `ssh -p 26 root@<rover-lan-ip>`; the connector logs to
 `/tmp/rover_vda5050.log`, Mosquitto to `/tmp/rover_mosquitto.log`.
 
 The rover's broker is anonymous and unencrypted: fine on the rover LAN, not beyond it.
@@ -743,7 +743,7 @@ these ports on `192.168.1.201`:
 
 | Port | Service |
 |---|---|
-| 22–27 | SSH into the containers |
+| 22–26 | SSH into the containers |
 | 80, 5000 | Drive UI (`ROVER_DRIVE_PORT`; the fleet variable sets 80) |
 | 5080 | Uplink page |
 | 8765 | foxglove_bridge |
