@@ -166,7 +166,7 @@ trap 'terminate_children; exit 0' TERM INT
 #
 # Port 24 (set in the image's sshd_config drop-in), not 22: host networking shares one port
 # space, so each container's sshd has its own - platform 22, sensors 23, orchestrator 24,
-# drive-interface 25, cockpit 27.
+# drive-interface 25, vda5050 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")

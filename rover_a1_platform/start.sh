@@ -279,7 +279,7 @@ sleep 2
 # Web bridges, supervised like everything else below (not exec'd as PID 1), so a
 # crash here is detected the same way as a crash in any other process:
 # - foxglove_bridge (/rover_foxglove_bridge) - used by the web dashboards (network
-#   monitor LED page, Cockpit diagnostics).
+#   monitor LED page, diagnostics page).
 # - rosbridge websocket + rosapi (/rover_rosbridge_websocket, /rosapi) - kept only for
 #   ros-mcp-server to introspect and control the ROS graph.
 # rover_web_bridges.launch.py starts them under rover_-prefixed node names.

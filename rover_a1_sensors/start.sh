@@ -163,7 +163,7 @@ trap 'terminate_children; exit 0' TERM INT
 # **SSHD background (keep alive)** - started before the enable/disable gate below, so the
 # container is reachable even while the payload idles. Port 23 (set in the image's
 # sshd_config drop-in): one port per container on the shared host network - platform 22,
-# sensors 23, orchestrator 24, drive-interface 25, cockpit 27.
+# sensors 23, orchestrator 24, drive-interface 25, vda5050 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")

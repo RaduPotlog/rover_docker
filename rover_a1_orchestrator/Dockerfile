@@ -42,7 +42,7 @@ RUN apt-get update && apt-get install -y \
 #
 # Port 24, not 22: every service in docker-compose.yml is network_mode: host, so they share
 # one port space and each sshd gets its own port - platform 22, sensors 23, orchestrator 24,
-# drive-interface 25, cockpit 27.
+# drive-interface 25, vda5050 26.
 RUN apt-get update && apt-get install -y openssh-server \
     && mkdir -p /var/run/sshd \
     && rm -rf /var/lib/apt/lists/*

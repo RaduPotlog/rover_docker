@@ -23,7 +23,7 @@ RUN apt-get update \
 # Tracks the tip of `master` by default, so every `balena push --nocache` picks
 # up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_DRIVE_INTERFACE_REF=<sha>` for a reproducible build instead.
-# Same convention as ROVER_COCKPIT_REF / ROVER_ROS_REF in the other services.
+# Same convention as ROVER_ROS_REF in the other services.
 ARG ROVER_DRIVE_INTERFACE_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_drive_interface.git /src \
     && git -C /src checkout ${ROVER_DRIVE_INTERFACE_REF}
@@ -48,7 +48,7 @@ RUN apt-get update \
 
 # Same arrangement as rover-a1-orchestrator / rover-a1-sensors: root password login through
 # an sshd_config.d drop-in, only the port differs - 25, because host networking shares one
-# port space: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 27.
+# port space: platform 22, sensors 23, orchestrator 24, drive-interface 25, vda5050 26.
 # Debian's stock sshd_config starts with `Include /etc/ssh/sshd_config.d/*.conf`, and the
 # package's postinst generates the host keys. See README.md "Drive interface SSH".
 RUN apt-get update \

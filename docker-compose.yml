@@ -154,7 +154,7 @@ services:
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
     healthcheck:
-      # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here, see rover-cockpit.
+      # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
@@ -178,8 +178,8 @@ services:
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
     # rover_crsf_teleop writes the measured RC stick calibration to
-    # /config/rover_crsf_teleop/rc_calibration.yaml when an operator applies one from the Cockpit
-    # RC page. A named volume, not a bind mount, for the same reason as rover-maps: a balenaOS
+    # /config/rover_crsf_teleop/rc_calibration.yaml when an operator applies one through the
+    # node's rc/calibration services. A named volume, not a bind mount, for the same reason as rover-maps: a balenaOS
     # device filesystem is read-only outside one. It survives container restarts and image
     # updates, but not a device reprovision - copy it off with
     # `scp root@<device>:/config/rover_crsf_teleop/rc_calibration.yaml .` (sshd is on port 22).
@@ -261,7 +261,7 @@ services:
       - rover-a1-zenoh-router
     restart: always
     # Its sshd listens on 24 (one SSH port per container in the shared host network: platform 22,
-    # sensors 23, orchestrator 24, drive-interface 25, cockpit 27).
+    # sensors 23, orchestrator 24, drive-interface 25, vda5050 26).
     network_mode: host
     # map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and
     # localization_source=amcl reads it back through ROVER_NAV_MAP. A named volume, not a bind
@@ -346,7 +346,7 @@ services:
     depends_on:
       - rover-a1-zenoh-router
     restart: always
-    # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 27.
+    # Its sshd listens on 23: platform 22, sensors 23, orchestrator 24, drive-interface 25, vda5050 26.
     network_mode: host
     # The RealSense D435i enumerates under /dev/bus/usb and /dev/video*, and re-enumerates on
     # every re-plug, so a fixed `devices:` list would not follow it. Same approach as the
@@ -591,7 +591,7 @@ services:
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
     healthcheck:
-      # Script in the image (reads ROVER_DRIVE_PORT); no `$` here, see rover-cockpit.
+      # Script in the image (reads ROVER_DRIVE_PORT); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
@@ -679,7 +679,7 @@ services:
       ROVER_VDA5050_MAP_FRAME:
     healthcheck:
       # Script in the image (TCP connect to the local broker when there is one); no `$` here,
-      # see rover-cockpit.
+      # (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
@@ -713,7 +713,7 @@ services:
       LAN_ZONE: 'lan'
       CLIENT_NETS: 'lan WWAN'
     healthcheck:
-      # Script in the image (reads NETUI_PORT); no `$` here, see rover-cockpit.
+      # Script in the image (reads NETUI_PORT); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
@@ -723,8 +723,8 @@ services:
 volumes:
   # Persists the SLAM map across container restarts for localization_source=amcl.
   rover-maps:
-  # Persists the measured RC stick calibration. Only rover-a1-platform needs it: the Cockpit page
-  # reaches the calibration through the node's rc/calibration services, never by reading the file.
+  # Persists the measured RC stick calibration. Only rover-a1-platform needs it: clients reach
+  # the calibration through the node's rc/calibration services, never by reading the file.
   rover-config:
   # Router host key (pinned on first use) and the log of uplink changes (rover-a1-network).
   rover-network:

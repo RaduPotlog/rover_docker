@@ -162,7 +162,7 @@ trap 'terminate_children; exit 0' TERM INT
 
 # **SSHD background (keep alive)** - before the enable gate, so a shell is available while the
 # container idles. Port 26 (image's sshd_config drop-in): platform 22, sensors 23,
-# orchestrator 24, drive-interface 25, vda5050 26 (cockpit would take 27).
+# orchestrator 24, drive-interface 25, vda5050 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")

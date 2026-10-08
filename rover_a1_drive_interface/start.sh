@@ -34,7 +34,7 @@ rm -f /tmp/drive-interface-idle
 
 # **SSHD background (keep alive)** - started before the gates below, so the container is
 # reachable even while the drive interface idles. Port 25 (set in the image's sshd_config
-# drop-in): platform 22, sensors 23, orchestrator 24, drive-interface 25, cockpit 27.
+# drop-in): platform 22, sensors 23, orchestrator 24, drive-interface 25, vda5050 26.
 /usr/sbin/sshd -D &
 SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")

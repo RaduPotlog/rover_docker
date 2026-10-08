@@ -14,8 +14,7 @@
 # limitations under the License.
 
 # Container healthcheck: nginx answers /healthz (no login) on the configured port.
-# In the image rather than docker-compose.yml: balena's compose parser mangles `$$`
-# (see rover_cockpit/healthcheck.sh).
+# In the image rather than docker-compose.yml: balena's compose parser mangles `$$`.
 #
 # While start.sh idles on purpose (ROVER_DRIVE_ENABLE=false, or no ROVER_DRIVE_PASSWORD) there
 # is no nginx to ask. It leaves this marker so the container is not reported unhealthy, which
