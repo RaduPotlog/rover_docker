@@ -231,7 +231,9 @@ esac
 ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 ROVER_GPS_PUBLISH_MAP_TF=$(norm_bool "${ROVER_GPS_PUBLISH_MAP_TF:-}" false)
 ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
-# Adds the RealSense depth cloud to the local costmap; the driver itself runs in rover-a1-sensors.
+# Adds the RealSense depth cloud to the local costmap (bringup.launch.py use_camera).
+ROVER_NAV_USE_CAMERA=$(norm_bool "${ROVER_NAV_USE_CAMERA:-}" false)
+# The camera itself runs in rover-a1-sensors; read here only to warn when Nav 2 would wait on it.
 ROVER_USE_CAMERA=$(norm_bool "${ROVER_USE_CAMERA:-}" false)
 # true only when the platform is rover_gazebo (Gazebo publishes /clock); never on the rover.
 ROVER_USE_SIM_TIME=$(norm_bool "${ROVER_USE_SIM_TIME:-}" false)
@@ -381,6 +383,9 @@ fi
 if [ "$ROVER_USE_LIDAR" != true ]; then
   echo "WARNING: ROVER_USE_LIDAR=false - no lidar driver in rover-a1-sensors, so the costmaps stay empty and navigation drives blind"
 fi
+if [ "$ROVER_NAV_USE_CAMERA" = true ] && [ "$ROVER_USE_CAMERA" != true ]; then
+  echo "WARNING: ROVER_NAV_USE_CAMERA=true but ROVER_USE_CAMERA=false - the local costmap waits on camera/depth/points, which nothing publishes"
+fi
 
 ROVER_NAV_MAP=${ROVER_NAV_MAP:-/root/ros2_ws/rover_a1/install/rover_navigation/share/rover_navigation/map/empty_world.yaml}
 
@@ -402,14 +407,14 @@ nohup ros2 launch rover_navigation bringup.launch.py \
   use_sim_time:="${ROVER_USE_SIM_TIME}" \
   "${NAMESPACE_ARG[@]}" \
   localization_source:="${LOCALIZATION_SOURCE}" \
-  use_camera:="${ROVER_USE_CAMERA}" \
+  use_camera:="${ROVER_NAV_USE_CAMERA}" \
   map:="${ROVER_NAV_MAP}" \
   > >(rotating_log /tmp/rover_nav.log "$ROVER_LOG_MAX_BYTES" "$ROVER_LOG_BACKUP_COUNT") 2>&1 < /dev/null &
 NAV_PID=$!
 set +m
 LAUNCH_PGIDS+=("$NAV_PID")
 CHILD_PIDS+=("$NAV_PID")
-echo "Nav 2 bringup started in background (PID: $NAV_PID, localization_source=$LOCALIZATION_SOURCE, map=$ROVER_NAV_MAP)"
+echo "Nav 2 bringup started in background (PID: $NAV_PID, localization_source=$LOCALIZATION_SOURCE, map=$ROVER_NAV_MAP, camera costmap=$ROVER_NAV_USE_CAMERA)"
 
 # **Mission manager - Background**
 if [ "$ROVER_START_MISSION_MANAGER" = true ]; then
