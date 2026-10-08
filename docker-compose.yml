@@ -41,14 +41,16 @@ version: '2.4'
 # ROVER_GPS_PUBLISH_MAP_TF     platform: global EKF publishes map -> odom (default false: SLAM/AMCL
 #                              own it); orchestrator: localization_source checks
 # ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
-# ROVER_USE_CAMERA             sensors: RealSense driver + perception nodes; orchestrator: adds the
-#                              camera depth source to the Nav 2 costmaps (default false)
+# ROVER_USE_CAMERA             sensors: RealSense driver + perception nodes (default false);
+#                              orchestrator: only warns when ROVER_NAV_USE_CAMERA needs it
 # ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam | amcl | indoor, overrides ROVER_USE_GPS;
 #                              indoor = drive-UI mapping + maps in /maps (rover_indoor_nav_manager);
 #                              sensors: indoor/slam/amcl make poor GNSS accuracy a WARN, not an ERROR
 # ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world;
 #                              REQUIRED for localization_source=amcl (the default empty map
 #                              cannot localize) - build one with =slam first, see below
+# ROVER_NAV_USE_CAMERA         orchestrator: add the camera depth cloud to the Nav 2 local costmap
+#                              (default false; needs ROVER_USE_CAMERA, and a measured camera mount)
 # ROVER_AMCL_INITIAL_POSE_*    orchestrator: X/Y/YAW AMCL is seeded with at startup, in the map
 #                              frame; unset = 0,0,0, correct only if the map origin is the dock
 # ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
@@ -100,6 +102,7 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_NAV_USE_CAMERA: 'false'
       ROVER_AMCL_INITIAL_POSE_X:
       ROVER_AMCL_INITIAL_POSE_Y:
       ROVER_AMCL_INITIAL_POSE_YAW:
@@ -195,6 +198,7 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_NAV_USE_CAMERA: 'false'
       ROVER_AMCL_INITIAL_POSE_X:
       ROVER_AMCL_INITIAL_POSE_Y:
       ROVER_AMCL_INITIAL_POSE_YAW:
@@ -276,6 +280,7 @@ services:
       ROVER_USE_CAMERA: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_NAV_USE_CAMERA: 'false'
       ROVER_AMCL_INITIAL_POSE_X:
       ROVER_AMCL_INITIAL_POSE_Y:
       ROVER_AMCL_INITIAL_POSE_YAW:
@@ -363,6 +368,7 @@ services:
       ROVER_CAMERA_DETECTION_MAX_RATE: '10.0'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_NAV_USE_CAMERA: 'false'
       ROVER_AMCL_INITIAL_POSE_X:
       ROVER_AMCL_INITIAL_POSE_Y:
       ROVER_AMCL_INITIAL_POSE_YAW:
@@ -431,6 +437,7 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_NAV_USE_CAMERA: 'false'
       ROVER_AMCL_INITIAL_POSE_X:
       ROVER_AMCL_INITIAL_POSE_Y:
       ROVER_AMCL_INITIAL_POSE_YAW:
@@ -513,6 +520,7 @@ services:
       ROVER_USE_LIDAR: 'false'
       ROVER_LOCALIZATION_SOURCE:
       ROVER_NAV_MAP:
+      ROVER_NAV_USE_CAMERA: 'false'
       ROVER_AMCL_INITIAL_POSE_X:
       ROVER_AMCL_INITIAL_POSE_Y:
       ROVER_AMCL_INITIAL_POSE_YAW:
