@@ -15,10 +15,11 @@
 # rover-a1-follow-me: follow-me for Rover A1.
 #
 # A follow-me algorithm (ROVER_FOLLOW_ME_ALGO, default fmoc: ADBSCAN on the RealSense depth cloud)
-# tracks a person; the follow master turns their path into VDA 5050 2.0 orders for the rover's
-# connector (rover-a1-vda5050) over MQTT, so Nav 2 drives as for any order. It never publishes
-# cmd_vel. Like the other ROS services it joins rover-a1-zenoh-router over host networking, runs
-# an sshd on its own port (27) and carries the Claude Code / ros-mcp tooling for parity with them.
+# tracks a person; the follow_me node runs following as one goal of Nav 2's Following server (in
+# rover-a1-orchestrator), whose velocity goes through the velocity smoother, the collision monitor
+# and drive mode like any Nav 2 motion. It never publishes cmd_vel. Like the other ROS services it
+# joins rover-a1-zenoh-router over host networking, runs an sshd on its own port (27) and carries
+# the Claude Code / ros-mcp tooling for parity with them.
 FROM ubuntu:26.04
 
 # Avoid interactive prompts during build
@@ -108,22 +109,28 @@ RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
 # rover_follow_me carries everything follow-me: the FollowTarget contract (rover_follow_me_msgs),
-# the VDA 5050 follow master (rover_follow_me_core), the algorithms (rover_fmoc) and the launch
-# (rover_follow_me_bringup). It talks to the rover over MQTT (the VDA 5050 connector in
-# rover-a1-vda5050) and ROS (camera cloud, odom, TF); it needs no other rover repository.
-# rover_follow_me has a single branch, master (github.com/RaduPotlog/rover_follow_me); pin a
-# commit with --build-arg ROVER_FOLLOW_ME_REF=<sha>.
+# the follow_me node that runs following as a Nav 2 FollowObject goal (rover_follow_me_nav2), the
+# algorithms (rover_fmoc) and the launch (rover_follow_me_bringup). The Following server itself
+# runs with Nav 2 in rover-a1-orchestrator. rover_follow_me has a single branch, master
+# (github.com/RaduPotlog/rover_follow_me); pin a commit with --build-arg ROVER_FOLLOW_ME_REF=<sha>.
 ARG ROVER_FOLLOW_ME_REF=master
 RUN git clone https://github.com/RaduPotlog/rover_follow_me.git src/rover_follow_me \
     && git -C src/rover_follow_me checkout ${ROVER_FOLLOW_ME_REF}
+# rover_ros is cloned only for rover_msgs (drive_mode, mission_state); nothing else of it is built
+# or rosdep-resolved. Keep ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator,
+# rover_a1_vda5050 and here.
+ARG ROVER_ROS_REF=feature/rover_follow_me
+RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
+    && git -C src/rover_ros checkout ${ROVER_ROS_REF}
 
 RUN rosdep init
 RUN rosdep update --rosdistro "${ROS_DISTRO}"
 # apt-get update in the same RUN - rosdep does not refresh the index itself (see
-# rover_a1_orchestrator). Brings python3-paho-mqtt, python3-numpy, python3-scipy, sensor_msgs_py,
-# tf2_ros_py, ...
+# rover_a1_orchestrator). Brings python3-numpy, python3-scipy, sensor_msgs_py, tf2_ros_py,
+# nav2_msgs, ...
 RUN apt-get update \
-    && rosdep install --from-paths src/rover_follow_me --rosdistro "${ROS_DISTRO}" -y -i \
+    && rosdep install --from-paths src/rover_follow_me src/rover_ros/rover_msgs \
+       --rosdistro "${ROS_DISTRO}" -y -i \
     && rm -rf /var/lib/apt/lists/*
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \

@@ -13,10 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# rover-a1-follow-me health: the MQTT broker the follow master talks to accepts connections.
-# Healthy when the service idles (ROVER_START_FOLLOW_ME false) - there is nothing to check, and
-# an unhealthy container gets restarted by balenaEngine. The launch is supervised by start.sh,
-# which exits (and so restarts the container) when it dies.
+# rover-a1-follow-me health: the follow_me and fmoc processes are running. Healthy when the
+# service idles (ROVER_START_FOLLOW_ME false) - there is nothing to check, and an unhealthy
+# container gets restarted by balenaEngine. The launch itself is supervised by start.sh, which
+# exits (and so restarts the container) when it dies; this catches a node that died under it.
 
 norm_bool() {
   case "${1:-$2}" in
@@ -29,4 +29,8 @@ if [ "$(norm_bool "${ROVER_START_FOLLOW_ME:-}" false)" != true ]; then
   exit 0
 fi
 
-exec 3<>/dev/tcp/"${ROVER_VDA5050_BROKER_HOST:-127.0.0.1}"/"${ROVER_VDA5050_BROKER_PORT:-1883}"
+pgrep -f "lib/rover_follow_me_nav2/follow_me_node" > /dev/null || exit 1
+case "${ROVER_FOLLOW_ME_ALGO:-fmoc}" in
+  fmoc) pgrep -f "lib/rover_fmoc/fmoc_node" > /dev/null || exit 1 ;;
+esac
+exit 0

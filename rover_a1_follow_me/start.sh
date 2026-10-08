@@ -194,7 +194,6 @@ norm_bool() {
 }
 
 ROVER_START_FOLLOW_ME=$(norm_bool "${ROVER_START_FOLLOW_ME:-}" false)
-ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
 
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them.
@@ -204,37 +203,6 @@ if [ "$ROVER_START_FOLLOW_ME" != true ]; then
   wait "$SSHD_PID" || true
   terminate_children
   exit 0
-fi
-
-# The follow master is VDA 5050 master control on the connector's broker (rover-a1-vda5050):
-# same host, port, user and identity variables.
-BROKER_HOST=${ROVER_VDA5050_BROKER_HOST:-127.0.0.1}
-BROKER_PORT=${ROVER_VDA5050_BROKER_PORT:-1883}
-# This MQTT link has no TLS. The connector turns TLS on when a user is set (unless
-# ROVER_VDA5050_BROKER_TLS=false): idle rather than send credentials in clear to a broker that
-# expects TLS, or fail to connect forever.
-if [ -n "${ROVER_VDA5050_BROKER_USER:-}" ] && [ "$(norm_bool "${ROVER_VDA5050_BROKER_TLS:-}" true)" = true ]; then
-  echo "Follow-me needs a plain MQTT broker; ROVER_VDA5050_BROKER_USER is set with TLS (ROVER_VDA5050_BROKER_TLS=${ROVER_VDA5050_BROKER_TLS:-auto}). Idling (sshd on 27 stays up)"
-  wait "$SSHD_PID" || true
-  terminate_children
-  exit 0
-fi
-
-# Order coordinates are in the connector's map frame - the same derivation as rover-a1-vda5050's
-# start.sh: odom for localization source 'odom', map for the rest, ROVER_VDA5050_MAP_FRAME wins.
-if [ -n "${ROVER_LOCALIZATION_SOURCE:-}" ]; then
-  LOCALIZATION_SOURCE=$ROVER_LOCALIZATION_SOURCE
-elif [ "$ROVER_USE_GPS" = true ]; then
-  LOCALIZATION_SOURCE=gps
-else
-  LOCALIZATION_SOURCE=odom
-fi
-if [ -n "${ROVER_VDA5050_MAP_FRAME:-}" ]; then
-  MAP_FRAME=$ROVER_VDA5050_MAP_FRAME
-elif [ "$LOCALIZATION_SOURCE" = odom ]; then
-  MAP_FRAME=odom
-else
-  MAP_FRAME=map
 fi
 
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
@@ -260,9 +228,13 @@ fi
 pkill -f ros2_daemon || true
 sleep 1
 
-if [ "$(norm_bool "${ROVER_START_VDA5050:-}" false)" != true ] && \
-   { [ "$BROKER_HOST" = 127.0.0.1 ] || [ "$BROKER_HOST" = localhost ]; }; then
-  echo "WARNING: ROVER_START_VDA5050=false - no VDA 5050 connector (rover-a1-vda5050) takes the follow-me orders"
+# The Following server runs with Nav 2 in rover-a1-orchestrator, and it only drives in AUTOMATIC,
+# which needs the mission manager there.
+if [ "$(norm_bool "${ROVER_START_NAVIGATION:-}" false)" != true ]; then
+  echo "WARNING: ROVER_START_NAVIGATION=false - no Nav 2, so no Following server: follow_me/start will be refused"
+fi
+if [ "$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" false)" != true ]; then
+  echo "WARNING: ROVER_START_MISSION_MANAGER=false - the rover cannot enter AUTOMATIC, which following needs"
 fi
 ALGO=${ROVER_FOLLOW_ME_ALGO:-fmoc}
 if [ "$ALGO" = fmoc ] && [ "$(norm_bool "${ROVER_USE_CAMERA:-}" false)" != true ]; then
@@ -270,26 +242,12 @@ if [ "$ALGO" = fmoc ] && [ "$(norm_bool "${ROVER_USE_CAMERA:-}" false)" != true 
 fi
 
 # **Follow-me - Background**
-LAUNCH_ARGS=(
-  algo:="${ALGO}"
-  map_frame:="${MAP_FRAME}"
-  mqtt_host:="${BROKER_HOST}"
-  mqtt_port:="${BROKER_PORT}"
-  manufacturer:="${ROVER_VDA5050_MANUFACTURER:-MechatronicsAcademy}"
-  serial_number:="${ROVER_VDA5050_SERIAL_NUMBER:-rover_a1}"
-)
+# fmoc tracks in odom (the default): smooth, and the Following server's own fixed frame.
+LAUNCH_ARGS=(algo:="${ALGO}")
 # Unset or empty = unnamespaced; the launch file then reads ROVER_NAMESPACE itself.
 if [ -n "${ROVER_NAMESPACE:-}" ]; then
   LAUNCH_ARGS+=(namespace:="${ROVER_NAMESPACE}")
 fi
-if [ -n "${ROVER_VDA5050_BROKER_USER:-}" ]; then
-  LAUNCH_ARGS+=(mqtt_username:="${ROVER_VDA5050_BROKER_USER}")
-fi
-if [ -n "${ROVER_VDA5050_BROKER_PASSWORD:-}" ]; then
-  LAUNCH_ARGS+=(mqtt_password:="${ROVER_VDA5050_BROKER_PASSWORD}")
-fi
-# Not traced: the password would land in the balena logs.
-set +x
 # As a job (set -m), so the launch and its nodes get their own process group (PGID = its PID)
 # that stop_launch_groups can signal as a whole, and SIGINT is not ignored in them.
 set -m
@@ -300,7 +258,7 @@ set +m
 LAUNCH_PGIDS+=("$FOLLOW_ME_PID")
 set -x
 CHILD_PIDS+=("$FOLLOW_ME_PID")
-echo "Follow-me started in background (PID: $FOLLOW_ME_PID, algo ${ALGO}, broker ${BROKER_HOST}:${BROKER_PORT}, frame ${MAP_FRAME})"
+echo "Follow-me started in background (PID: $FOLLOW_ME_PID, algo ${ALGO})"
 
 # **Supervise** - block until the first supervised process exits, then tear everything down
 # and exit so `restart: always` brings the service back cleanly. `|| EXIT_CODE=$?`: under

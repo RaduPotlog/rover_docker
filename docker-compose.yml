@@ -69,10 +69,11 @@ version: '2.4'
 #                              the orchestrator's localization source)
 # ROVER_START_FOLLOW_ME        follow-me: run follow-me (default false). A person standing 1.5 m in
 #                              front of the stopped rover is picked up; `ros2 service call
-#                              /<ns>/follow_me/start std_srvs/srv/Trigger` starts following. Needs
-#                              ROVER_START_VDA5050 (it sends VDA 5050 orders to that connector, on
-#                              its broker and identity, ROVER_VDA5050_*: plain MQTT only), the
-#                              mission manager, AUTOMATIC drive mode and, for fmoc, ROVER_USE_CAMERA
+#                              /<ns>/follow_me/start std_srvs/srv/Trigger` (or the drive UI, or the
+#                              VDA 5050 instant action startFollowing) starts following through
+#                              Nav 2's Following server. Needs ROVER_START_NAVIGATION and
+#                              ROVER_START_MISSION_MANAGER, AUTOMATIC drive mode and, for fmoc,
+#                              ROVER_USE_CAMERA
 # ROVER_FOLLOW_ME_ALGO         follow-me: the follow-me algorithm (default fmoc: follow-me on camera)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (its own
@@ -598,9 +599,9 @@ services:
       retries: 3
 
   # Follow-me (repo github.com/RaduPotlog/rover_follow_me): a follow-me algorithm tracks a person
-  # (fmoc: the RealSense depth cloud) and the follow master turns their path into VDA 5050 orders
-  # for rover-a1-vda5050's connector, so Nav 2 drives as for any order. Never publishes cmd_vel.
-  # Idle unless ROVER_START_FOLLOW_ME=true.
+  # (fmoc: the RealSense depth cloud) and the follow_me node runs following as a goal of Nav 2's
+  # Following server in rover-a1-orchestrator, so the velocity smoother, collision monitor and
+  # drive mode guard it. Never publishes cmd_vel. Idle unless ROVER_START_FOLLOW_ME=true.
   rover-a1-follow-me:
     build:
       context: ./rover_a1_follow_me
