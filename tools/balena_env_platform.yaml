@@ -1,5 +1,6 @@
 # balenaCloud variables of the Rover A1 fleet, managed with tools/balena_env.py:
-# only the ones rover-a1-platform reads (its environment in docker-compose.yml).
+# the ones only rover-a1-platform reads, scoped to that service. The all-services
+# variables it also reads are in balena_env_global.yaml.
 # Use with `balena_env.py --file balena_env_platform.yaml diff|write`; `init` and `dump`
 # regenerate the full list from docker-compose.yml, so keep those for balena_env.yaml.
 #
@@ -16,38 +17,8 @@ fleet: g_potlog_radu/rovera1
 device: null
 
 variables:
-  # --- System (all services) ---
-  - {name: ROVER_SYSTEM_NAMESPACE, value: null, default: rover, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_USE_GPS, value: null, default: 'false', level: device, service: '*'}
-  # --- Sensor mount poses (all services) ---
-  - {name: ROVER_SYSTEM_MOUNT_IMU_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_IMU_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_IMU_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_IMU_ROLL, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_IMU_PITCH, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_IMU_YAW, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_GPS_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_GPS_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_GPS_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_GPS_ROLL, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_GPS_PITCH, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_GPS_YAW, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_LIDAR_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_LIDAR_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_LIDAR_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_LIDAR_ROLL, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_LIDAR_PITCH, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_LIDAR_YAW, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_ROLL, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_PITCH, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_YAW, value: null, default: null, level: device, service: '*'}
   # --- Zenoh session mode ---
   - {name: ROVER_ZENOH_MODE_PLATFORM, value: null, default: peer, level: device, service: rover-a1-platform}
   # --- Platform ---
-  - {name: ROVER_PLATFORM_ENABLE, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_PLATFORM_GPS_MAP_TF, value: null, default: 'false', level: device, service: '*'}
   - {name: ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST, value: null, default: null, level: device, service: rover-a1-platform}
   - {name: ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST, value: null, default: null, level: device, service: rover-a1-platform}
