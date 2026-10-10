@@ -27,12 +27,6 @@ variables:
   - {name: UPLINK_ZONE, value: null, default: wwan, level: device, service: rover-a1-network}
   - {name: LAN_ZONE, value: null, default: lan, level: device, service: rover-a1-network}
   - {name: CLIENT_NETS, value: null, default: lan WWAN, level: device, service: rover-a1-network}
-  # --- System (all services) ---
-  - {name: ROVER_SYSTEM_LAN_IP, value: null, default: 192.168.1.201, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_LOG_MAX_MB, value: null, default: '20', level: device, service: '*'}
-  - {name: ROVER_SYSTEM_LOG_BACKUPS, value: null, default: '3', level: device, service: '*'}
-  - {name: ROVER_SYSTEM_ROS_LOG_MAX_MB, value: null, default: '300', level: device, service: '*'}
-  - {name: ROVER_SYSTEM_ROS_LOG_KEEP_DAYS, value: null, default: '7', level: device, service: '*'}
   # --- Zenoh session mode ---
   - {name: ROVER_ZENOH_MODE_PLATFORM, value: peer, default: peer, level: device, service: rover-a1-platform}
   - {name: ROVER_ZENOH_MODE_ORCH, value: null, default: client, level: device, service: '*'}
