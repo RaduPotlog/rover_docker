@@ -33,3 +33,4 @@ variables:
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_ROLL, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_PITCH, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_YAW, value: '0', default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: null, default: 'false', level: device, service: '*'}
