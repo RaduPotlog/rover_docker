@@ -14,42 +14,137 @@
 
 version: '2.4'
 
+# Rover A1 balena services. All use host networking: they share the Zenoh router on
+# 127.0.0.1:7447 (rover-a1-zenoh-router, its own service so it keeps running while the others
+# restart), and the sensors receive UDP (NMEA 10110, RS16 6699/7788) directly. Each SSH-enabled
+# container has its own sshd port: platform 22, sensors 23, orchestrator 24,
+# drive-interface 25, vda5050 26.
+#
+# Environment
+#   Each service declares only the variables it reads. `KEY: 'value'` is a default; `KEY:`
+#   stays unset unless balenaCloud sets it. A balenaCloud variable overrides the default, and
+#   an all-services one reaches every container whether or not it is declared here.
+#   Names are ROVER_<SCOPE>_<THING>: SCOPE is the container that acts on it (PLATFORM, ORCH,
+#   SENSORS, UI, VDA5050, NETWORK) or SYSTEM when several do - set a ROVER_SYSTEM_* variable
+#   for all services so they agree. The Zenoh mode is ROVER_ZENOH_MODE_<CONTAINER>.
+#   Reference: README.md "Device variables". Old names: tools/env_renames.yaml. balenaCloud
+#   values: tools/balena_env*.yaml (tools/balena_env.py).
+#
+# --- System (all services) ---
+# ROVER_SYSTEM_NAMESPACE         ROS namespace and TF prefix
+# ROVER_SYSTEM_USE_GPS           sensors: GNSS driver; platform: GPS fusion;
+#                                orchestrator: localization_source gps vs odom
+# ROVER_SYSTEM_USE_LIDAR         sensors: RS16 driver; orchestrator: warns when off
+# ROVER_SYSTEM_USE_CAMERA        sensors: RealSense driver + camera perception; orchestrator: warns
+#                                when ROVER_ORCH_NAV_USE_CAMERA or follow-me needs it;
+#                                platform: Gazebo camera in simulation only
+# ROVER_SYSTEM_FOLLOW_ME_ENABLE  follow-me: sensors run the fmoc person tracker (needs the camera),
+#                                the orchestrator the follow_me node (needs navigation, the
+#                                mission manager and AUTOMATIC drive mode)
+# ROVER_SYSTEM_GPS_MAP_TF        platform: the global EKF publishes map -> odom (default false:
+#                                SLAM/AMCL own it); orchestrator: localization_source checks
+# ROVER_SYSTEM_MOUNT_<IMU|GPS|LIDAR|CAMERA>_<X|Y|Z|ROLL|PITCH|YAW>
+#                                sensor mount pose relative to body_link (m, rad), read by
+#                                rover_description in the platform; unset = URDF default
+#
+# --- Zenoh session mode, one per container ---
+# ROVER_ZENOH_MODE_<PLATFORM|ORCH|SENSORS|VDA5050>
+#                                peer = direct links between processes (platform default, so its
+#                                control loops never wait on the router); client = one link to the
+#                                router (the others' default). See README.md "ROS 2 over the rover
+#                                LAN" before changing one
+#
+# --- rover-a1-platform ---
+# ROVER_PLATFORM_ENABLE          run rover_bringup; the orchestrator idles without it, so set it
+#                                for all services
+# ROVER_PLATFORM_FOXGLOVE_<TOPIC|SERVICE>_WHITELIST
+#                                foxglove_bridge whitelists; unset = only what the web UIs use
+#                                (rover_web_bridges.launch.py), "['.*']" = everything
+#
+# --- rover-a1-orchestrator ---
+# ROVER_ORCH_NAVIGATION          run Nav 2 (needs ROVER_PLATFORM_ENABLE)
+# ROVER_ORCH_MISSION_MANAGER     run the mission manager on top of Nav 2 (AUTOMATIC driving mode,
+#                                GoTo, VDA 5050 orders)
+# ROVER_ORCH_DRIVE_MODE          run rover_drive_mode (independent of Nav 2); off = the drive UI's
+#                                joystick reaches nothing
+# ROVER_ORCH_DRIVE_DEFAULT_MODE  driving mode at boot: assisted (lidar slow/stop) | manual
+# ROVER_ORCH_LOCALIZATION_SOURCE odom | gps | slam | amcl | indoor, overrides ROVER_SYSTEM_USE_GPS;
+#                                indoor = drive-UI mapping + maps in /maps. Also read by the
+#                                sensors (GNSS faults only warn for indoor/slam/amcl) and vda5050
+#                                (order frame)
+# ROVER_ORCH_NAV_MAP             map yaml (full path), default rover_navigation's empty_world;
+#                                required for amcl - build one with slam first
+# ROVER_ORCH_NAV_USE_CAMERA      add the camera depth cloud to the local costmap (needs the camera
+#                                and a measured camera mount)
+# ROVER_ORCH_AMCL_INITIAL_POSE_<X|Y|YAW>
+#                                AMCL's start pose in the map frame; unset = 0,0,0
+#
+# --- rover-a1-sensors ---
+# ROVER_SENSORS_ENABLE           run the sensor payload drivers at all
+# ROVER_SENSORS_CAMERA_*         RealSense rate/resolution, depth cloud, AprilTags, YOLO detection
+# ROVER_SENSORS_TERRAIN          ground slope from the lidar cloud (needs ROVER_SYSTEM_USE_LIDAR)
+#
+# --- rover-a1-drive-interface ---
+# ROVER_UI_*                     on/off, http port, login, teleop limits (m/s, rad/s), rim-speed
+#                                limit + track width (keep equal to rover_crsf_teleop.yaml), stick
+#                                expo (0 linear .. 1 softest); no password = the UI is not served
+#
+# --- rover-a1-vda5050 ---
+# ROVER_VDA5050_ENABLE           run the VDA 5050 fleet interface (orders need
+#                                ROVER_ORCH_MISSION_MANAGER=true)
+# ROVER_VDA5050_*                local Mosquitto, broker host/port/user/password, TLS (auto = on when
+#                                a user is set), manufacturer + serial number (MQTT topic levels),
+#                                order frame (unset = follows the localization source)
+
 services:
+  # The Zenoh router (rmw_zenohd) every ROS process connects to. Its own service, so platform
+  # restarts and releases don't take the ROS graph down: the image only changes with the ROS
+  # release. Binds 127.0.0.1:7447 plus ROVER_SYSTEM_LAN_IP (default 192.168.1.201) for PCs on
+  # the rover LAN (setup_rover_pc.sh). It reads only ROVER_SYSTEM_LAN_IP, which balena injects
+  # from the balenaCloud variable, so it declares no environment.
   rover-a1-zenoh-router:
     build:
       context: ./rover_a1_zenoh_router
     restart: always
+    # rmw_zenohd starts closing on SIGTERM but, with clients connected, never finishes. It holds
+    # no state, so kill it after 2 s: a restart interrupts cross-container traffic for ~3 s.
     stop_grace_period: 2s
     network_mode: host
     healthcheck:
+      # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here (balena's compose
+      # parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
       start_period: 20s
       retries: 3
+
+  # The rover itself: rover_bringup (ros2_control, drivers, safety, localization, LEDs, teleop)
+  # and the web bridges (foxglove_bridge, rosbridge). sshd on 22.
   rover-a1-platform:
     build:
       context: ./rover_a1_platform
+    # Start order only; start.sh still waits until the router accepts connections.
     depends_on:
       - rover-a1-zenoh-router
+    # Direct hardware access for the rover drivers.
     privileged: true
     restart: always
     network_mode: host
     labels:
       io.balena.features.dbus: 'true'
+      # rover_safety powers off the device through the Supervisor API (/v1/shutdown).
       io.balena.features.supervisor-api: '1'
       io.balena.features.balena-socket: 'true'
       io.balena.features.sysfs: 'true'
+    # rover_crsf_teleop keeps the measured RC stick calibration in
+    # /config/rover_crsf_teleop/rc_calibration.yaml (see the rover-config volume).
     volumes:
       - rover-config:/config
     environment:
       ROVER_SYSTEM_NAMESPACE: 'rover'
       ROVER_SYSTEM_USE_GPS: 'false'
-      ROVER_SYSTEM_USE_LIDAR: 'false'
       ROVER_SYSTEM_USE_CAMERA: 'false'
-      ROVER_PLATFORM_ENABLE: 'true'
-      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
       ROVER_SYSTEM_GPS_MAP_TF: 'false'
       ROVER_SYSTEM_MOUNT_IMU_X:
       ROVER_SYSTEM_MOUNT_IMU_Y:
@@ -76,13 +171,22 @@ services:
       ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
       ROVER_SYSTEM_MOUNT_CAMERA_YAW:
       ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+
+  # Autonomy: Nav 2 (rover_navigation), the mission manager, follow-me and the driving modes
+  # (rover_drive_mode). Idles while the platform is disabled. sshd on 24.
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
+    # Start order only; start.sh still waits until the router accepts connections.
     depends_on:
       - rover-a1-zenoh-router
     restart: always
     network_mode: host
+    # Maps: map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and amcl
+    # reads one back through ROVER_ORCH_NAV_MAP (see the rover-maps volume).
     volumes:
       - rover-maps:/maps
     environment:
@@ -91,38 +195,9 @@ services:
       ROVER_SYSTEM_USE_LIDAR: 'false'
       ROVER_SYSTEM_USE_CAMERA: 'false'
       ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
-      ROVER_SYSTEM_MOUNT_IMU_X:
-      ROVER_SYSTEM_MOUNT_IMU_Y:
-      ROVER_SYSTEM_MOUNT_IMU_Z:
-      ROVER_SYSTEM_MOUNT_IMU_ROLL:
-      ROVER_SYSTEM_MOUNT_IMU_PITCH:
-      ROVER_SYSTEM_MOUNT_IMU_YAW:
-      ROVER_SYSTEM_MOUNT_GPS_X:
-      ROVER_SYSTEM_MOUNT_GPS_Y:
-      ROVER_SYSTEM_MOUNT_GPS_Z:
-      ROVER_SYSTEM_MOUNT_GPS_ROLL:
-      ROVER_SYSTEM_MOUNT_GPS_PITCH:
-      ROVER_SYSTEM_MOUNT_GPS_YAW:
-      ROVER_SYSTEM_MOUNT_LIDAR_X:
-      ROVER_SYSTEM_MOUNT_LIDAR_Y:
-      ROVER_SYSTEM_MOUNT_LIDAR_Z:
-      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
-      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
-      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
-      ROVER_SYSTEM_MOUNT_CAMERA_X:
-      ROVER_SYSTEM_MOUNT_CAMERA_Y:
-      ROVER_SYSTEM_MOUNT_CAMERA_Z:
-      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
-      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
-      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
-      ROVER_ZENOH_MODE_PLATFORM: 'peer'
-      ROVER_ZENOH_MODE_ORCH: 'client'
-      ROVER_ZENOH_MODE_SENSORS: 'client'
-      ROVER_ZENOH_MODE_VDA5050: 'client'
-      ROVER_PLATFORM_ENABLE: 'true'
       ROVER_SYSTEM_GPS_MAP_TF: 'false'
-      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
       ROVER_ORCH_NAVIGATION: 'false'
       ROVER_ORCH_MISSION_MANAGER: 'false'
       ROVER_ORCH_DRIVE_MODE: 'true'
@@ -133,40 +208,30 @@ services:
       ROVER_ORCH_AMCL_INITIAL_POSE_X:
       ROVER_ORCH_AMCL_INITIAL_POSE_Y:
       ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
-      ROVER_SENSORS_ENABLE: 'false'
-      ROVER_UI_ENABLE: 'true'
-      ROVER_UI_PORT: '5000'
-      ROVER_UI_USER: 'rover'
-      ROVER_UI_PASSWORD:
-      ROVER_UI_MAX_LINEAR: '1.0'
-      ROVER_UI_MAX_ANGULAR: '1.0'
-      ROVER_UI_MAX_RIM_SPEED: '1.7'
-      ROVER_UI_TRACK_WIDTH: '1.0204'
-      ROVER_UI_EXPO_LINEAR: '0.3'
-      ROVER_UI_EXPO_ANGULAR: '0.5'
-      ROVER_VDA5050_ENABLE: 'false'
-      ROVER_VDA5050_LOCAL_BROKER: 'true'
-      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
-      ROVER_VDA5050_BROKER_PORT: '1883'
-      ROVER_VDA5050_BROKER_USER:
-      ROVER_VDA5050_BROKER_PASSWORD:
-      ROVER_VDA5050_BROKER_TLS: 'auto'
-      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
-      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
-      ROVER_VDA5050_MAP_FRAME:
+
+  # Sensor payload: GNSS (rover_gps), RS16 lidar, RealSense camera (rover_sensors) and the
+  # perception nodes next to them (rover_perception: AprilTags, YOLO, terrain, fmoc person
+  # tracking). Idle unless ROVER_SENSORS_ENABLE=true. sshd on 23.
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
+    # Start order only; start.sh still waits until the router accepts connections.
     depends_on:
       - rover-a1-zenoh-router
     restart: always
     network_mode: host
+    # The RealSense D435i enumerates under /dev/bus/usb and /dev/video* and re-enumerates on
+    # every re-plug, so a fixed `devices:` list would not follow it. Only needed with
+    # ROVER_SYSTEM_USE_CAMERA=true.
     privileged: true
     environment:
       ROVER_SYSTEM_NAMESPACE: 'rover'
       ROVER_SYSTEM_USE_GPS: 'false'
       ROVER_SYSTEM_USE_LIDAR: 'false'
       ROVER_SYSTEM_USE_CAMERA: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
       ROVER_SENSORS_ENABLE: 'false'
       ROVER_SENSORS_CAMERA_FPS: '15'
       ROVER_SENSORS_CAMERA_DEPTH_PROFILE: '424x240'
@@ -178,9 +243,10 @@ services:
       ROVER_SENSORS_CAMERA_DETECTION_GPU: 'false'
       ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE: '10.0'
       ROVER_SENSORS_TERRAIN: 'false'
-      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
-      ROVER_ORCH_LOCALIZATION_SOURCE:
-      ROVER_ZENOH_MODE_SENSORS: 'client'
+
+  # Drive UI (rover_drive_interface), served by nginx with a login on ROVER_UI_PORT. Its joystick
+  # drives through rover_drive_mode in the orchestrator. Not served without ROVER_UI_PASSWORD
+  # (the container idles); sshd on 25.
   rover-a1-drive-interface:
     build:
       context: ./rover_a1_drive_interface
@@ -188,52 +254,6 @@ services:
     network_mode: host
     environment:
       ROVER_SYSTEM_NAMESPACE: 'rover'
-      ROVER_SYSTEM_USE_GPS: 'false'
-      ROVER_SYSTEM_USE_LIDAR: 'false'
-      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
-      ROVER_SYSTEM_MOUNT_IMU_X:
-      ROVER_SYSTEM_MOUNT_IMU_Y:
-      ROVER_SYSTEM_MOUNT_IMU_Z:
-      ROVER_SYSTEM_MOUNT_IMU_ROLL:
-      ROVER_SYSTEM_MOUNT_IMU_PITCH:
-      ROVER_SYSTEM_MOUNT_IMU_YAW:
-      ROVER_SYSTEM_MOUNT_GPS_X:
-      ROVER_SYSTEM_MOUNT_GPS_Y:
-      ROVER_SYSTEM_MOUNT_GPS_Z:
-      ROVER_SYSTEM_MOUNT_GPS_ROLL:
-      ROVER_SYSTEM_MOUNT_GPS_PITCH:
-      ROVER_SYSTEM_MOUNT_GPS_YAW:
-      ROVER_SYSTEM_MOUNT_LIDAR_X:
-      ROVER_SYSTEM_MOUNT_LIDAR_Y:
-      ROVER_SYSTEM_MOUNT_LIDAR_Z:
-      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
-      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
-      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
-      ROVER_SYSTEM_MOUNT_CAMERA_X:
-      ROVER_SYSTEM_MOUNT_CAMERA_Y:
-      ROVER_SYSTEM_MOUNT_CAMERA_Z:
-      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
-      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
-      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
-      ROVER_ZENOH_MODE_PLATFORM: 'peer'
-      ROVER_ZENOH_MODE_ORCH: 'client'
-      ROVER_ZENOH_MODE_SENSORS: 'client'
-      ROVER_ZENOH_MODE_VDA5050: 'client'
-      ROVER_PLATFORM_ENABLE: 'true'
-      ROVER_SYSTEM_GPS_MAP_TF: 'false'
-      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_ORCH_NAVIGATION: 'false'
-      ROVER_ORCH_MISSION_MANAGER: 'false'
-      ROVER_ORCH_DRIVE_MODE: 'true'
-      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_ORCH_LOCALIZATION_SOURCE:
-      ROVER_ORCH_NAV_MAP:
-      ROVER_ORCH_NAV_USE_CAMERA: 'false'
-      ROVER_ORCH_AMCL_INITIAL_POSE_X:
-      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
-      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
-      ROVER_SENSORS_ENABLE: 'false'
       ROVER_UI_ENABLE: 'true'
       ROVER_UI_PORT: '5000'
       ROVER_UI_USER: 'rover'
@@ -244,18 +264,9 @@ services:
       ROVER_UI_TRACK_WIDTH: '1.0204'
       ROVER_UI_EXPO_LINEAR: '0.3'
       ROVER_UI_EXPO_ANGULAR: '0.5'
-      ROVER_VDA5050_ENABLE: 'false'
-      ROVER_VDA5050_LOCAL_BROKER: 'true'
-      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
-      ROVER_VDA5050_BROKER_PORT: '1883'
-      ROVER_VDA5050_BROKER_USER:
-      ROVER_VDA5050_BROKER_PASSWORD:
-      ROVER_VDA5050_BROKER_TLS: 'auto'
-      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
-      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
-      ROVER_VDA5050_MAP_FRAME:
     healthcheck:
-      # Script in the image (reads ROVER_UI_PORT); no `$` here (balena's compose parser mangles `$$`).
+      # Script in the image (reads ROVER_UI_PORT); no `$` here (balena's compose parser mangles
+      # `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
@@ -263,8 +274,8 @@ services:
       retries: 3
 
   # VDA 5050 fleet interface: InOrbit's connector + rover_vda5050_adapter (rover_vda5050), driving
-  # through rover_mission_manager in rover-a1-orchestrator. Idle unless ROVER_VDA5050_ENABLE=true.
-  # Runs its own Mosquitto (1883, WebSockets 9001) with ROVER_VDA5050_LOCAL_BROKER=true; sshd on 26.
+  # through rover_mission_manager in the orchestrator. Idle unless ROVER_VDA5050_ENABLE=true.
+  # Runs its own Mosquitto (1883, WebSockets 9001) with ROVER_VDA5050_LOCAL_BROKER=true. sshd on 26.
   rover-a1-vda5050:
     build:
       context: ./rover_a1_vda5050
@@ -276,61 +287,9 @@ services:
     environment:
       ROVER_SYSTEM_NAMESPACE: 'rover'
       ROVER_SYSTEM_USE_GPS: 'false'
-      ROVER_SYSTEM_USE_LIDAR: 'false'
-      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
-      ROVER_SYSTEM_MOUNT_IMU_X:
-      ROVER_SYSTEM_MOUNT_IMU_Y:
-      ROVER_SYSTEM_MOUNT_IMU_Z:
-      ROVER_SYSTEM_MOUNT_IMU_ROLL:
-      ROVER_SYSTEM_MOUNT_IMU_PITCH:
-      ROVER_SYSTEM_MOUNT_IMU_YAW:
-      ROVER_SYSTEM_MOUNT_GPS_X:
-      ROVER_SYSTEM_MOUNT_GPS_Y:
-      ROVER_SYSTEM_MOUNT_GPS_Z:
-      ROVER_SYSTEM_MOUNT_GPS_ROLL:
-      ROVER_SYSTEM_MOUNT_GPS_PITCH:
-      ROVER_SYSTEM_MOUNT_GPS_YAW:
-      ROVER_SYSTEM_MOUNT_LIDAR_X:
-      ROVER_SYSTEM_MOUNT_LIDAR_Y:
-      ROVER_SYSTEM_MOUNT_LIDAR_Z:
-      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
-      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
-      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
-      ROVER_SYSTEM_MOUNT_CAMERA_X:
-      ROVER_SYSTEM_MOUNT_CAMERA_Y:
-      ROVER_SYSTEM_MOUNT_CAMERA_Z:
-      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
-      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
-      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
-      ROVER_ZENOH_MODE_PLATFORM: 'peer'
-      ROVER_ZENOH_MODE_ORCH: 'client'
-      ROVER_ZENOH_MODE_SENSORS: 'client'
       ROVER_ZENOH_MODE_VDA5050: 'client'
-      ROVER_PLATFORM_ENABLE: 'true'
-      ROVER_SYSTEM_GPS_MAP_TF: 'false'
-      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_ORCH_NAVIGATION: 'false'
       ROVER_ORCH_MISSION_MANAGER: 'false'
-      ROVER_ORCH_DRIVE_MODE: 'true'
-      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
       ROVER_ORCH_LOCALIZATION_SOURCE:
-      ROVER_ORCH_NAV_MAP:
-      ROVER_ORCH_NAV_USE_CAMERA: 'false'
-      ROVER_ORCH_AMCL_INITIAL_POSE_X:
-      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
-      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
-      ROVER_SENSORS_ENABLE: 'false'
-      ROVER_UI_ENABLE: 'true'
-      ROVER_UI_PORT: '5000'
-      ROVER_UI_USER: 'rover'
-      ROVER_UI_PASSWORD:
-      ROVER_UI_MAX_LINEAR: '1.0'
-      ROVER_UI_MAX_ANGULAR: '1.0'
-      ROVER_UI_MAX_RIM_SPEED: '1.7'
-      ROVER_UI_TRACK_WIDTH: '1.0204'
-      ROVER_UI_EXPO_LINEAR: '0.3'
-      ROVER_UI_EXPO_ANGULAR: '0.5'
       ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
@@ -342,7 +301,7 @@ services:
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
     healthcheck:
-      # Script in the image (TCP connect to the local broker when there is one); no `$` here,
+      # Script in the image (TCP connect to the local broker when there is one); no `$` here
       # (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
@@ -350,11 +309,11 @@ services:
       start_period: 30s
       retries: 3
 
-  # Wi-Fi uplink page (app: github.com/RaduPotlog/rover_networking, rutx11/): switches the
-  # RUTX11's Wi-Fi client to another network IN PLACE and keeps firewall zones / NAT /
-  # forwarding consistent, so the wired LAN and the rover AP keep internet. Talks to the router
-  # over SSH; changes are rolled back by the router itself if the new uplink does not come up.
-  # No ROS, no sshd. Idles without NETUI_PASSWORD / RUTX11_PASSWORD.
+  # Wi-Fi uplink page (github.com/RaduPotlog/rover_networking, rutx11/): switches the RUTX11's
+  # Wi-Fi client to another network in place and keeps firewall zones, NAT and forwarding
+  # consistent, so the wired LAN and the rover AP keep internet. Talks to the router over SSH;
+  # the router rolls a change back itself if the new uplink does not come up. No ROS, no sshd.
+  # Idles without NETUI_PASSWORD / RUTX11_PASSWORD.
   rover-a1-network:
     build:
       context: ./rover_a1_network
@@ -371,7 +330,7 @@ services:
       RUTX11_PASSWORD:
       RUTX11_HOST: '192.168.1.1'
       RUTX11_USER: 'root'
-      # 'auto' finds the Wi-Fi uplink in the config (RutOS names it WWAN1, wan1, wan2, …).
+      # 'auto' finds the Wi-Fi uplink in the config (RutOS names it WWAN1, wan1, wan2, ...).
       UPLINK_IFACE: 'auto'
       UPLINK_ZONE: 'wwan'
       LAN_ZONE: 'lan'
@@ -384,11 +343,16 @@ services:
       start_period: 10s
       retries: 3
 
+# Named volumes, not bind mounts: a balenaOS device filesystem is read-only outside them. They
+# survive container restarts and image updates, but not a device reprovision - copy the data
+# off with scp (ports above).
 volumes:
-  # Persists the SLAM map across container restarts for localization_source=amcl.
+  # SLAM maps (orchestrator): map_autosaver output, read back by amcl. `scp -P 24
+  # root@<device>:/maps/map.* .`
   rover-maps:
-  # Persists the measured RC stick calibration. Only rover-a1-platform needs it: clients reach
-  # the calibration through the node's rc/calibration services, never by reading the file.
+  # Measured RC stick calibration (platform, rover_crsf_teleop). Clients reach it through the
+  # node's rc/calibration services, never by reading the file. `scp
+  # root@<device>:/config/rover_crsf_teleop/rc_calibration.yaml .`
   rover-config:
-  # Router host key (pinned on first use) and the log of uplink changes (rover-a1-network).
+  # Router host key (pinned on first use) and the log of uplink changes (network).
   rover-network:
