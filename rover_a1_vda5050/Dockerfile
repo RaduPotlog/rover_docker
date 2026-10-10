@@ -118,10 +118,9 @@ WORKDIR /root/ros2_ws/rover_a1
 # and the rover's adapter and bringup. rover_ros is cloned only for rover_msgs (mission, drive
 # mode and safety messages); nothing else of it is built or rosdep-resolved.
 # Keep ROVER_ROS_REF equal in rover_a1_platform, rover_a1_orchestrator and here.
-# TEMPORARY: builds rover_ros's feature/rover_follow_me: instrumented/failsafe-off (command-path
-# diagnostics, 25 Hz control loop, master merged in) plus the opt-in Gazebo depth camera for
-# follow-me. The DCC1000 motor-driver failsafe is ENABLED there (motor_failsafe_enabled=true in
-# the URDF; the failsafe-off name is historical). Set back to master once both are merged.
+# TEMPORARY: builds rover_ros's feature/rover_follow_me: master (instrumented/failsafe-off is
+# merged there: DCC1000 failsafe enabled, 25 Hz control loop, command-path diagnostics) plus the
+# opt-in Gazebo depth camera for follow-me. Set back to master once it is merged.
 ARG ROVER_ROS_REF=feature/rover_follow_me
 # TEMPORARY: feature/rover_follow_me (follow-me through the Nav 2 Following server); set back
 # to master once it is merged.

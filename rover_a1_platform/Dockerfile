@@ -128,10 +128,9 @@ WORKDIR /root/ros2_ws/rover_a1
 # build (see README) picks up the latest commit; pin to a specific SHA with
 # `--build-arg ROVER_ROS_REF=<sha>` to pin the rover source instead.
 # Imported dependencies and package versions remain independently versioned.
-# TEMPORARY: builds rover_ros's feature/rover_follow_me: instrumented/failsafe-off (command-path
-# diagnostics, 25 Hz control loop, master merged in) plus the opt-in Gazebo depth camera for
-# follow-me. The DCC1000 motor-driver failsafe is ENABLED there (motor_failsafe_enabled=true in
-# the URDF; the failsafe-off name is historical). Set back to master once both are merged.
+# TEMPORARY: builds rover_ros's feature/rover_follow_me: master (instrumented/failsafe-off is
+# merged there: DCC1000 failsafe enabled, 25 Hz control loop, command-path diagnostics) plus the
+# opt-in Gazebo depth camera for follow-me. Set back to master once it is merged.
 ARG ROVER_ROS_REF=feature/rover_follow_me
 RUN git clone https://github.com/RaduPotlog/rover_ros.git src/rover_ros \
     && git -C src/rover_ros checkout ${ROVER_ROS_REF}
