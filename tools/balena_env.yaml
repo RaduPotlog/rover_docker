@@ -28,9 +28,7 @@ variables:
   - {name: LAN_ZONE, value: null, default: lan, level: device, service: rover-a1-network}
   - {name: CLIENT_NETS, value: null, default: lan WWAN, level: device, service: rover-a1-network}
   # --- System (all services) ---
-  - {name: ROVER_SYSTEM_USE_LIDAR, value: null, default: 'false', level: device, service: '*'}
   - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_SYSTEM_USE_CAMERA, value: null, default: 'false', level: device, service: '*'}
   - {name: ROVER_SYSTEM_LAN_IP, value: null, default: 192.168.1.201, level: device, service: '*'}
   - {name: ROVER_SYSTEM_LOG_MAX_MB, value: null, default: '20', level: device, service: '*'}
   - {name: ROVER_SYSTEM_LOG_BACKUPS, value: null, default: '3', level: device, service: '*'}

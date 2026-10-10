@@ -19,4 +19,6 @@ device: null
 variables:
   # --- Sensors ---
   - {name: ROVER_SENSORS_ENABLE, value: 'true', default: 'false', level: device, service: 'rover-a1-sensors'}
+  # --- Zenoh session mode ---
+  - {name: ROVER_ZENOH_MODE_SENSORS, value: client, default: client, level: device, service: 'rover-a1-sensors'}
   

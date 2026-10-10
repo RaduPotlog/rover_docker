@@ -16,7 +16,4 @@
 fleet: g_potlog_radu/rovera1
 device: null
 
-variables:
-  # --- Zenoh session mode ---
-  - {name: ROVER_ZENOH_MODE_PLATFORM, value: peer, default: peer, level: device, service: rover-a1-platform}
-  - {name: ROVER_ZENOH_MODE_SENSORS, value: client, default: client, level: device, service: 'rover-a1-sensors'}
+variables: []
