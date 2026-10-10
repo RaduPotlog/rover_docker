@@ -50,7 +50,6 @@ variables:
   - {name: ROVER_ORCH_AMCL_INITIAL_POSE_YAW, value: null, default: null, level: device, service: '*'}
   # --- Sensors ---
   - {name: ROVER_SENSORS_ENABLE, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_SENSORS_TERRAIN, value: null, default: 'false', level: device, service: '*'}
   # --- Drive interface ---
   - {name: ROVER_UI_ENABLE, value: null, default: 'true', level: device, service: '*'}
   - {name: ROVER_UI_PORT, value: null, default: '5000', level: device, service: '*'}
