@@ -18,7 +18,7 @@ device: null
 
 variables:
   # --- Zenoh session mode ---
-  - {name: ROVER_ZENOH_MODE_PLATFORM, value: null, default: peer, level: device, service: rover-a1-platform}
+  - {name: ROVER_ZENOH_MODE_PLATFORM, value: peer, default: peer, level: device, service: rover-a1-platform}
   # --- Platform ---
   - {name: ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST, value: null, default: null, level: device, service: rover-a1-platform}
   - {name: ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST, value: null, default: null, level: device, service: rover-a1-platform}
