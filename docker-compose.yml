@@ -48,9 +48,9 @@ services:
       ROVER_SYSTEM_USE_LIDAR: 'false'
       ROVER_SYSTEM_USE_CAMERA: 'false'
       ROVER_PLATFORM_ENABLE: 'true'
-      ROVER_SYSTEM_GPS_MAP_TF: 'false'
       ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_SYSTEM_GPS_MAP_TF: 'false'
       ROVER_SYSTEM_MOUNT_IMU_X:
       ROVER_SYSTEM_MOUNT_IMU_Y:
       ROVER_SYSTEM_MOUNT_IMU_Z:
@@ -79,18 +79,10 @@ services:
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
-    # Start order only; start.sh still waits until the router accepts connections.
     depends_on:
       - rover-a1-zenoh-router
     restart: always
-    # Its sshd listens on 24 (one SSH port per container in the shared host network: platform 22,
-    # sensors 23, orchestrator 24, drive-interface 25, vda5050 26).
     network_mode: host
-    # map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and
-    # localization_source=amcl reads it back through ROVER_ORCH_NAV_MAP. A named volume, not a bind
-    # mount: a balenaOS device filesystem is read-only outside /data. The map survives container
-    # restarts and image updates, but not a device reprovision - copy it off with
-    # `scp -P 24 root@<device>:/maps/map.* .`
     volumes:
       - rover-maps:/maps
     environment:
