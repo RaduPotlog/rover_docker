@@ -44,6 +44,3 @@ variables:
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_ROLL, value: null, default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_PITCH, value: null, default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_YAW, value: null, default: null, level: device, service: '*'}
-  # --- Platform ---
-  - {name: ROVER_PLATFORM_ENABLE, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_PLATFORM_GPS_MAP_TF, value: null, default: 'false', level: device, service: '*'}
