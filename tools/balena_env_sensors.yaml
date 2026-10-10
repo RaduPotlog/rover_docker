@@ -1,18 +1,3 @@
-# balenaCloud variables of the Rover A1 fleet, managed with tools/balena_env.py:
-# the ones only rover-a1-sensors reads, scoped to that service. The all-services
-# variables it also reads are in balena_env_global.yaml.
-# Use with `balena_env.py --file balena_env_sensors.yaml diff|write`; `init` and `dump`
-# regenerate the full list from docker-compose.yml, so keep those for balena_env.yaml.
-#
-# device: UUID, UUID prefix or name; null = the fleet's only device.
-#
-# One entry per (name, level, service):
-#   value    what balena_env.py writes; null = not managed (the compose default applies)
-#   default  docker-compose.yml default, for reference only
-#   level    device | fleet
-#   service  '*' = all services, or one compose service (e.g. rover-a1-network)
-#   secret   never stored here; set it from the menu ("Set a secret")
-
 fleet: g_potlog_radu/rovera1
 device: null
 
