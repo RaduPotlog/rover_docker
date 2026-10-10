@@ -33,7 +33,7 @@ variables:
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_ROLL, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_PITCH, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_YAW, value: '0', default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: 'false', default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: 'true', default: 'false', level: device, service: '*'}
    # --- System (all services) ---
   - {name: ROVER_SYSTEM_LAN_IP, value: null, default: 192.168.1.201, level: device, service: '*'}
   - {name: ROVER_SYSTEM_LOG_MAX_MB, value: null, default: '20', level: device, service: '*'}

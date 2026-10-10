@@ -51,7 +51,7 @@ variables:
   - {name: ROVER_SENSORS_ENABLE, value: 'true', default: 'false', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_FPS, value: '15', default: '15', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_DEPTH_PROFILE, value: 424x240, default: 424x240, level: device, service: rover-a1-sensors}
-  - {name: ROVER_SENSORS_CAMERA_DEPTH_CLOUD, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
+  - {name: ROVER_SENSORS_CAMERA_DEPTH_CLOUD, value: 'true', default: 'false', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_FIDUCIALS, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE, value: '2.0', default: '2.0', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_DETECTION, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
