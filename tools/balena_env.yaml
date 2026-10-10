@@ -50,15 +50,6 @@ variables:
   - {name: ROVER_ORCH_AMCL_INITIAL_POSE_YAW, value: null, default: null, level: device, service: '*'}
   # --- Sensors ---
   - {name: ROVER_SENSORS_ENABLE, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_FPS, value: null, default: '15', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_DEPTH_PROFILE, value: null, default: 424x240, level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_DEPTH_CLOUD, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_FIDUCIALS, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE, value: null, default: '2.0', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_DETECTION, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_DETECTION_MODEL, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_DETECTION_GPU, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE, value: null, default: '10.0', level: device, service: '*'}
   - {name: ROVER_SENSORS_TERRAIN, value: null, default: 'false', level: device, service: '*'}
   # --- Drive interface ---
   - {name: ROVER_UI_ENABLE, value: null, default: 'true', level: device, service: '*'}
