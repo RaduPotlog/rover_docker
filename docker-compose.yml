@@ -32,9 +32,10 @@ version: '2.4'
 #
 # --- System (all services) ---
 # ROVER_SYSTEM_NAMESPACE         ROS namespace and TF prefix
-# ROVER_SYSTEM_USE_GPS           sensors: GNSS driver; platform: GPS fusion;
+# ROVER_SYSTEM_USE_GPS           sensors: GNSS driver; platform: GPS fusion + GPS diagnostics group;
 #                                orchestrator: localization_source gps vs odom
-# ROVER_SYSTEM_USE_LIDAR         sensors: RS16 driver; orchestrator: warns when off
+# ROVER_SYSTEM_USE_LIDAR         sensors: RS16 driver; orchestrator: warns when off;
+#                                platform: Lidar diagnostics group
 # ROVER_SYSTEM_USE_CAMERA        sensors: RealSense driver + camera perception; orchestrator: warns
 #                                when ROVER_ORCH_NAV_USE_CAMERA or follow-me needs it;
 #                                platform: Gazebo camera in simulation only
@@ -144,6 +145,7 @@ services:
     environment:
       ROVER_SYSTEM_NAMESPACE: 'rover'
       ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
       ROVER_SYSTEM_USE_CAMERA: 'false'
       ROVER_SYSTEM_GPS_MAP_TF: 'false'
       ROVER_SYSTEM_MOUNT_IMU_X:
