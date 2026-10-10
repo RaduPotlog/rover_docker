@@ -16,4 +16,7 @@
 fleet: g_potlog_radu/rovera1
 device: null
 
-variables: []
+variables:
+  # --- Sensors ---
+  - {name: ROVER_SENSORS_ENABLE, value: true, default: 'false', level: device, service: 'rover-a1-sensors'}
+  
