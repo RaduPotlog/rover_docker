@@ -382,8 +382,9 @@ healthcheck accepts. The service runs as an unprivileged user and has no sshd.
 
 ## Device variables
 
-Every variable below is declared on **every** ROVER service in `docker-compose.yml`, so a fleet
-or device variable reaches whichever container reads it. Defaults come from
+Every variable below is declared on every ROVER service in `docker-compose.yml`, except
+`rover-a1-zenoh-router` and `rover-a1-platform`, which declare only the variables they read. An
+all-services fleet or device variable reaches every container either way. Defaults come from
 `docker-compose.yml` or from each service's `start.sh`. Override them per device
 (balenaCloud → device → **Device Variables**) or per fleet (**Fleet Variables**).
 

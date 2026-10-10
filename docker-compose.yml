@@ -14,9 +14,10 @@
 
 version: '2.4'
 
-# Every ROVER service except rover-a1-zenoh-router declares the same ROVER_* variables, in the
-# same order (the sensors and orchestrator add the camera ones they read); each service acts only
-# on some of them (README.md, "Device variables"). A balenaCloud fleet/device variable overrides them.
+# The ROVER services declare the same ROVER_* variables, in the same order (the sensors and
+# orchestrator add the camera ones they read); each service acts only on some of them
+# (README.md, "Device variables"). rover-a1-zenoh-router and rover-a1-platform are the exceptions:
+# they declare only the variables they read. A balenaCloud fleet/device variable overrides them.
 # `KEY: 'value'` is a default; `KEY:` stays unset unless balenaCloud sets it.
 #
 # Names are ROVER_<SCOPE>_<THING>: SCOPE is the container that runs it (PLATFORM, ORCH,
@@ -131,7 +132,6 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
-
   rover-a1-platform:
     build:
       context: ./rover_a1_platform
@@ -156,11 +156,11 @@ services:
     # `scp root@<device>:/config/rover_crsf_teleop/rc_calibration.yaml .` (sshd is on port 22).
     volumes:
       - rover-config:/config
+    # Only the variables the platform reads (start.sh, rover_bringup, rover_localization,
+    # rover_description's sensor mount poses, the web bridges).
     environment:
       ROVER_SYSTEM_NAMESPACE: 'rover'
       ROVER_SYSTEM_USE_GPS: 'false'
-      ROVER_SYSTEM_USE_LIDAR: 'false'
-      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
       ROVER_SYSTEM_MOUNT_IMU_X:
       ROVER_SYSTEM_MOUNT_IMU_Y:
       ROVER_SYSTEM_MOUNT_IMU_Z:
@@ -186,44 +186,10 @@ services:
       ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
       ROVER_SYSTEM_MOUNT_CAMERA_YAW:
       ROVER_ZENOH_MODE_PLATFORM: 'peer'
-      ROVER_ZENOH_MODE_ORCH: 'client'
-      ROVER_ZENOH_MODE_SENSORS: 'client'
-      ROVER_ZENOH_MODE_VDA5050: 'client'
       ROVER_PLATFORM_ENABLE: 'true'
       ROVER_PLATFORM_GPS_MAP_TF: 'false'
       ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
       ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_ORCH_NAVIGATION: 'false'
-      ROVER_ORCH_MISSION_MANAGER: 'false'
-      ROVER_ORCH_DRIVE_MODE: 'true'
-      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_ORCH_LOCALIZATION_SOURCE:
-      ROVER_ORCH_NAV_MAP:
-      ROVER_ORCH_NAV_USE_CAMERA: 'false'
-      ROVER_ORCH_AMCL_INITIAL_POSE_X:
-      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
-      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
-      ROVER_SENSORS_ENABLE: 'false'
-      ROVER_UI_ENABLE: 'true'
-      ROVER_UI_PORT: '5000'
-      ROVER_UI_USER: 'rover'
-      ROVER_UI_PASSWORD:
-      ROVER_UI_MAX_LINEAR: '1.0'
-      ROVER_UI_MAX_ANGULAR: '1.0'
-      ROVER_UI_MAX_RIM_SPEED: '1.7'
-      ROVER_UI_TRACK_WIDTH: '1.0204'
-      ROVER_UI_EXPO_LINEAR: '0.3'
-      ROVER_UI_EXPO_ANGULAR: '0.5'
-      ROVER_VDA5050_ENABLE: 'false'
-      ROVER_VDA5050_LOCAL_BROKER: 'true'
-      ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
-      ROVER_VDA5050_BROKER_PORT: '1883'
-      ROVER_VDA5050_BROKER_USER:
-      ROVER_VDA5050_BROKER_PASSWORD:
-      ROVER_VDA5050_BROKER_TLS: 'auto'
-      ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
-      ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
-      ROVER_VDA5050_MAP_FRAME:
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
