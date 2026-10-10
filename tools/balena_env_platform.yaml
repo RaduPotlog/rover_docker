@@ -20,8 +20,8 @@ variables:
   # --- Zenoh session mode ---
   - {name: ROVER_ZENOH_MODE_PLATFORM, value: peer, default: peer, level: device, service: rover-a1-platform}
   # --- Platform ---
-  - {name: ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST, value: null, default: null, level: device, service: rover-a1-platform}
-  - {name: ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST, value: null, default: null, level: device, service: rover-a1-platform}
+  - {name: ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST, value: '', default: null, level: device, service: rover-a1-platform}
+  - {name: ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST, value: '', default: null, level: device, service: rover-a1-platform}
   # --- Platform shared with orchestrator ---
-  - {name: ROVER_PLATFORM_ENABLE, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_PLATFORM_GPS_MAP_TF, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_PLATFORM_ENABLE, value: 'true', default: 'true', level: device, service: '*'}
+  - {name: ROVER_PLATFORM_GPS_MAP_TF, value: 'false', default: 'false', level: device, service: '*'}
