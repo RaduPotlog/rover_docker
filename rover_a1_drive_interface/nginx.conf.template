@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # rover-a1-drive-interface: serves the drive UI and proxies the foxglove_bridge websocket.
-# Rendered by start.sh (envsubst on ${ROVER_DRIVE_PORT} and ${ROVER_DRIVE_BRIDGE}).
+# Rendered by start.sh (envsubst on ${ROVER_UI_PORT} and ${ROVER_UI_BRIDGE}).
 worker_processes 1;
 pid /tmp/nginx.pid;
 error_log /dev/stderr warn;
@@ -37,7 +37,7 @@ http {
     server {
         # network_mode: host - this is the rover's port 5000, as on the Boxer (OTTO App)
         # and Clearpath IndoorNav.
-        listen ${ROVER_DRIVE_PORT};
+        listen ${ROVER_UI_PORT};
 
         root /usr/share/nginx/drive;
         index index.html;
@@ -55,7 +55,7 @@ http {
         }
 
         location = /ws {
-            proxy_pass http://${ROVER_DRIVE_BRIDGE}/;
+            proxy_pass http://${ROVER_UI_BRIDGE}/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;

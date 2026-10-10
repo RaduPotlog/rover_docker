@@ -27,16 +27,90 @@ variables:
   - {name: UPLINK_ZONE, value: null, default: wwan, level: device, service: rover-a1-network}
   - {name: LAN_ZONE, value: null, default: lan, level: device, service: rover-a1-network}
   - {name: CLIENT_NETS, value: null, default: lan WWAN, level: device, service: rover-a1-network}
-  # --- Stack toggles ---
-  - {name: ROVER_START_ROS_PLATFORM, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_START_NAVIGATION, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_START_MISSION_MANAGER, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_START_DRIVE_MODE, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_DRIVE_DEFAULT_MODE, value: null, default: assisted, level: device, service: '*'}
-  - {name: ROVER_START_SENSORS, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_START_FOLLOW_ME, value: null, default: 'false', level: device, service: '*'}
+  # --- System (all services) ---
+  - {name: ROVER_SYSTEM_NAMESPACE, value: null, default: rover, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_USE_GPS, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_USE_LIDAR, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_USE_CAMERA, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_LAN_IP, value: null, default: 192.168.1.201, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_LOG_MAX_MB, value: null, default: '20', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_LOG_BACKUPS, value: null, default: '3', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_ROS_LOG_MAX_MB, value: null, default: '300', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_ROS_LOG_KEEP_DAYS, value: null, default: '7', level: device, service: '*'}
+  # --- Sensor mount poses (all services) ---
+  - {name: ROVER_SYSTEM_MOUNT_IMU_X, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_IMU_Y, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_IMU_Z, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_IMU_ROLL, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_IMU_PITCH, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_IMU_YAW, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_GPS_X, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_GPS_Y, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_GPS_Z, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_GPS_ROLL, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_GPS_PITCH, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_GPS_YAW, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_LIDAR_X, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_LIDAR_Y, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_LIDAR_Z, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_LIDAR_ROLL, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_LIDAR_PITCH, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_LIDAR_YAW, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_X, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_Y, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_Z, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_ROLL, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_PITCH, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_YAW, value: null, default: null, level: device, service: '*'}
+  # --- Zenoh session mode ---
+  - {name: ROVER_ZENOH_MODE_PLATFORM, value: null, default: peer, level: device, service: '*'}
+  - {name: ROVER_ZENOH_MODE_ORCH, value: null, default: client, level: device, service: '*'}
+  - {name: ROVER_ZENOH_MODE_SENSORS, value: null, default: client, level: device, service: '*'}
+  - {name: ROVER_ZENOH_MODE_VDA5050, value: null, default: client, level: device, service: '*'}
+  # --- Platform ---
+  - {name: ROVER_PLATFORM_ENABLE, value: null, default: 'true', level: device, service: '*'}
+  - {name: ROVER_PLATFORM_GPS_MAP_TF, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST, value: null, default: null, level: device, service: '*'}
+  # --- Orchestrator ---
+  - {name: ROVER_ORCH_NAVIGATION, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_ORCH_MISSION_MANAGER, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_ORCH_DRIVE_MODE, value: null, default: 'true', level: device, service: '*'}
+  - {name: ROVER_ORCH_DRIVE_DEFAULT_MODE, value: null, default: assisted, level: device, service: '*'}
+  - {name: ROVER_ORCH_LOCALIZATION_SOURCE, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_ORCH_NAV_MAP, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_ORCH_NAV_USE_CAMERA, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_ORCH_AMCL_INITIAL_POSE_X, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_ORCH_AMCL_INITIAL_POSE_Y, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_ORCH_AMCL_INITIAL_POSE_YAW, value: null, default: null, level: device, service: '*'}
+  # --- Sensors ---
+  - {name: ROVER_SENSORS_ENABLE, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_FPS, value: null, default: '15', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_DEPTH_PROFILE, value: null, default: 424x240, level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_DEPTH_CLOUD, value: null, default: 'true', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_FIDUCIALS, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE, value: null, default: '2.0', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_DETECTION, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_DETECTION_MODEL, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_DETECTION_GPU, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE, value: null, default: '10.0', level: device, service: '*'}
+  - {name: ROVER_SENSORS_TERRAIN, value: null, default: 'false', level: device, service: '*'}
+  # --- Drive interface ---
+  - {name: ROVER_UI_ENABLE, value: null, default: 'true', level: device, service: '*'}
+  - {name: ROVER_UI_PORT, value: null, default: '5000', level: device, service: '*'}
+  - {name: ROVER_UI_USER, value: null, default: rover, level: device, service: '*'}
+  - {name: ROVER_UI_PASSWORD, value: null, default: null, level: device, service: '*', secret: true}
+  - {name: ROVER_UI_MAX_LINEAR, value: null, default: '1.0', level: device, service: '*'}
+  - {name: ROVER_UI_MAX_ANGULAR, value: null, default: '1.0', level: device, service: '*'}
+  - {name: ROVER_UI_MAX_RIM_SPEED, value: null, default: '1.7', level: device, service: '*'}
+  - {name: ROVER_UI_TRACK_WIDTH, value: null, default: '1.0204', level: device, service: '*'}
+  - {name: ROVER_UI_EXPO_LINEAR, value: null, default: '0.3', level: device, service: '*'}
+  - {name: ROVER_UI_EXPO_ANGULAR, value: null, default: '0.5', level: device, service: '*'}
+  - {name: ROVER_UI_AUX_OUTPUT_NAMES, value: null, default: null, level: device, service: '*'}
+  - {name: ROVER_UI_AUX_INPUT_NAMES, value: null, default: null, level: device, service: '*'}
   # --- VDA 5050 ---
-  - {name: ROVER_START_VDA5050, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_VDA5050_ENABLE, value: null, default: 'false', level: device, service: '*'}
   - {name: ROVER_VDA5050_LOCAL_BROKER, value: null, default: 'true', level: device, service: '*'}
   - {name: ROVER_VDA5050_BROKER_HOST, value: null, default: 127.0.0.1, level: device, service: '*'}
   - {name: ROVER_VDA5050_BROKER_PORT, value: null, default: '1883', level: device, service: '*'}
@@ -46,69 +120,3 @@ variables:
   - {name: ROVER_VDA5050_MANUFACTURER, value: null, default: MechatronicsAcademy, level: device, service: '*'}
   - {name: ROVER_VDA5050_SERIAL_NUMBER, value: null, default: rover_a1, level: device, service: '*'}
   - {name: ROVER_VDA5050_MAP_FRAME, value: null, default: null, level: device, service: '*'}
-  # --- Drive interface ---
-  - {name: ROVER_DRIVE_ENABLE, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_DRIVE_PORT, value: null, default: '5000', level: device, service: '*'}
-  - {name: ROVER_DRIVE_USER, value: null, default: rover, level: device, service: '*'}
-  - {name: ROVER_DRIVE_PASSWORD, value: null, default: null, level: device, service: '*', secret: true}
-  - {name: ROVER_DRIVE_MAX_LINEAR, value: null, default: '1.0', level: device, service: '*'}
-  - {name: ROVER_DRIVE_MAX_ANGULAR, value: null, default: '1.0', level: device, service: '*'}
-  - {name: ROVER_DRIVE_MAX_RIM_SPEED, value: null, default: '1.7', level: device, service: '*'}
-  - {name: ROVER_DRIVE_TRACK_WIDTH, value: null, default: '1.0204', level: device, service: '*'}
-  - {name: ROVER_DRIVE_EXPO_LINEAR, value: null, default: '0.3', level: device, service: '*'}
-  - {name: ROVER_DRIVE_EXPO_ANGULAR, value: null, default: '0.5', level: device, service: '*'}
-  - {name: ROVER_DRIVE_AUX_OUTPUT_NAMES, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_DRIVE_AUX_INPUT_NAMES, value: null, default: null, level: device, service: '*'}
-  # --- Sensor mount poses ---
-  - {name: ROVER_GPS_LOCALIZATION_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_GPS_LOCALIZATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_GPS_LOCALIZATION_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_GPS_ORIENTATION_R, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_GPS_ORIENTATION_P, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_GPS_ORIENTATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_IMU_LOCALIZATION_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_IMU_LOCALIZATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_IMU_LOCALIZATION_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_IMU_ORIENTATION_R, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_IMU_ORIENTATION_P, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_IMU_ORIENTATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_LIDAR_LOCALIZATION_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_LIDAR_LOCALIZATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_LIDAR_LOCALIZATION_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_LIDAR_ORIENTATION_R, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_LIDAR_ORIENTATION_P, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_LIDAR_ORIENTATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_LOCALIZATION_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_LOCALIZATION_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_LOCALIZATION_Z, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_ORIENTATION_R, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_ORIENTATION_P, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_ORIENTATION_Y, value: null, default: null, level: device, service: '*'}
-  # --- Camera and perception ---
-  - {name: ROVER_CAMERA_DEPTH_CLOUD, value: null, default: 'true', level: device, service: '*'}
-  - {name: ROVER_CAMERA_FIDUCIALS, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_CAMERA_DETECTION, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_CAMERA_DETECTION_MODEL, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_CAMERA_DETECTION_GPU, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_USE_TERRAIN, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_CAMERA_FPS, value: null, default: '15', level: device, service: '*'}
-  - {name: ROVER_CAMERA_DEPTH_PROFILE, value: null, default: 424x240, level: device, service: '*'}
-  - {name: ROVER_CAMERA_FIDUCIALS_DECIMATE, value: null, default: '2.0', level: device, service: '*'}
-  - {name: ROVER_CAMERA_DETECTION_MAX_RATE, value: null, default: '10.0', level: device, service: '*'}
-  # --- Robot configuration ---
-  - {name: ROVER_NAMESPACE, value: null, default: rover, level: device, service: '*'}
-  - {name: ROVER_ZENOH_MODE, value: null, default: client, level: device, service: '*'}
-  - {name: ROVER_ZENOH_MODE, value: null, default: peer, level: device, service: rover-a1-platform}
-  - {name: ROVER_FOXGLOVE_TOPIC_WHITELIST, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_FOXGLOVE_SERVICE_WHITELIST, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_USE_GPS, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_GPS_PUBLISH_MAP_TF, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_USE_LIDAR, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_LOCALIZATION_SOURCE, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_NAV_MAP, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_NAV_USE_CAMERA, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_AMCL_INITIAL_POSE_X, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_AMCL_INITIAL_POSE_Y, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_AMCL_INITIAL_POSE_YAW, value: null, default: null, level: device, service: '*'}
-  - {name: ROVER_USE_CAMERA, value: null, default: 'false', level: device, service: '*'}
-  - {name: ROVER_LAN_IP, value: null, default: 192.168.1.201, level: device, service: '*'}

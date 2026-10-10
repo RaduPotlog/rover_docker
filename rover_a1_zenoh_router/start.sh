@@ -18,23 +18,23 @@
 
 # The router is reachable on loopback plus the rover LAN address only, so hosts on the rover LAN
 # (setup_rover_pc.sh) can join the ROS 2 graph while balenaVPN and GSM stay closed (binding an
-# address, not 0.0.0.0, is what keeps them out). Override per device/fleet with the ROVER_LAN_IP
-# balenaCloud variable.
-ROVER_LAN_IP=${ROVER_LAN_IP:-192.168.1.201}
+# address, not 0.0.0.0, is what keeps them out). Override per device/fleet with the
+# ROVER_SYSTEM_LAN_IP balenaCloud variable.
+ROVER_SYSTEM_LAN_IP=${ROVER_SYSTEM_LAN_IP:-192.168.1.201}
 
 # Binding an address the host doesn't have makes rmw_zenohd exit, which would crash-loop the
 # container. Give DHCP/NetworkManager a moment, then fall back to loopback only so the rover
 # still runs locally.
 ZENOH_LAN_ENDPOINT=""
 for _ in $(seq 1 10); do
-  if hostname -I | tr ' ' '\n' | grep -Fxq "$ROVER_LAN_IP"; then
-    ZENOH_LAN_ENDPOINT="\"tcp/${ROVER_LAN_IP}:7447\","
+  if hostname -I | tr ' ' '\n' | grep -Fxq "$ROVER_SYSTEM_LAN_IP"; then
+    ZENOH_LAN_ENDPOINT="\"tcp/${ROVER_SYSTEM_LAN_IP}:7447\","
     break
   fi
   sleep 1
 done
 if [ -z "$ZENOH_LAN_ENDPOINT" ]; then
-  echo "WARNING: rover LAN address $ROVER_LAN_IP not present; Zenoh router is loopback-only until the container restarts"
+  echo "WARNING: rover LAN address $ROVER_SYSTEM_LAN_IP not present; Zenoh router is loopback-only until the container restarts"
 fi
 
 source "/opt/ros/${ROS_DISTRO}/setup.bash"

@@ -23,12 +23,12 @@ CHILD_PIDS=()
 # stayed up (about 13 MB/day idle, far more if a fault spams) and was overwritten when it restarted,
 # which also destroyed the log of whatever crashed it; ~/.ros/log gained an entry for every
 # process start and every `ros2` CLI call, forever.
-#   ROVER_LOG_MAX_MB          size at which a log is rotated (default 20)
-#   ROVER_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
-#   ROVER_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
-#   ROVER_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
-ROVER_LOG_MAX_BYTES=$(( ${ROVER_LOG_MAX_MB:-20} * 1024 * 1024 ))
-ROVER_LOG_BACKUP_COUNT=${ROVER_LOG_BACKUPS:-3}
+#   ROVER_SYSTEM_LOG_MAX_MB          size at which a log is rotated (default 20)
+#   ROVER_SYSTEM_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
+#   ROVER_SYSTEM_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
+#   ROVER_SYSTEM_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
+ROVER_LOG_MAX_BYTES=$(( ${ROVER_SYSTEM_LOG_MAX_MB:-20} * 1024 * 1024 ))
+ROVER_LOG_BACKUP_COUNT=${ROVER_SYSTEM_LOG_BACKUPS:-3}
 
 # Copies stdin to FILE and keeps it below MAX_BYTES: when the next line would not fit, FILE becomes
 # FILE.1, FILE.1 becomes FILE.2 ... and the oldest of BACKUPS copies is dropped. A FILE left over
@@ -95,14 +95,15 @@ rotating_log() {
   exec python3 -u -c "$ROVER_ROTATING_LOG_PY" "$@"
 }
 
-# Delete ros logs older than ROVER_ROS_LOG_KEEP_DAYS, then the oldest ones until the directory is
-# below ROVER_ROS_LOG_MAX_MB. Called before anything is launched, so no live log is touched.
+# Delete ros logs older than ROVER_SYSTEM_ROS_LOG_KEEP_DAYS, then the oldest ones until the
+# directory is below ROVER_SYSTEM_ROS_LOG_MAX_MB. Called before anything is launched, so no live
+# log is touched.
 prune_ros_logs() {
   local - dir days max_mb entry
   set +x  # the size loop would flood the container log
   dir=${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}
-  days=${ROVER_ROS_LOG_KEEP_DAYS:-7}
-  max_mb=${ROVER_ROS_LOG_MAX_MB:-300}
+  days=${ROVER_SYSTEM_ROS_LOG_KEEP_DAYS:-7}
+  max_mb=${ROVER_SYSTEM_ROS_LOG_MAX_MB:-300}
   [ -d "$dir" ] || return 0
   find "$dir" -mindepth 1 -maxdepth 1 -mtime +"$days" -exec rm -rf {} + 2>/dev/null || true
   while [ "$(du -sm "$dir" 2>/dev/null | cut -f1)" -gt "$max_mb" ] 2>/dev/null; do
@@ -168,21 +169,21 @@ SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
 echo "sshd started on port 26 (PID: $SSHD_PID)"
 
-# **Zenoh session mode** - client unless ROVER_ZENOH_MODE=peer, as in rover-a1-orchestrator
+# **Zenoh session mode** - client unless ROVER_ZENOH_MODE_VDA5050=peer, as in rover-a1-orchestrator
 # (see its start.sh for why runtime-started groups are clients).
-case "${ROVER_ZENOH_MODE:-client}" in
-  [Pp][Ee][Ee][Rr]) ROVER_ZENOH_MODE=peer ;;
-  *) ROVER_ZENOH_MODE=client ;;
+case "${ROVER_ZENOH_MODE_VDA5050:-client}" in
+  [Pp][Ee][Ee][Rr]) ZENOH_MODE=peer ;;
+  *) ZENOH_MODE=client ;;
 esac
 ZENOH_ROUTER_ENDPOINT="tcp/127.0.0.1:7447"
 ZENOH_CLIENT_BASE="mode=\"client\";connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];listen/endpoints=[]"
-if [ "$ROVER_ZENOH_MODE" = client ]; then
+if [ "$ZENOH_MODE" = client ]; then
   export ZENOH_CONFIG_OVERRIDE="${ZENOH_CLIENT_BASE};connect/timeout_ms=-1;connect/retry={period_init_ms:500,period_max_ms:2000,period_increase_factor:2}"
 else
   unset ZENOH_CONFIG_OVERRIDE
 fi
 printf "export ZENOH_CONFIG_OVERRIDE='%s'\n" "${ZENOH_CLIENT_BASE};connect/timeout_ms=5000" > /tmp/rover_zenoh_cli.env
-echo "Zenoh session mode: $ROVER_ZENOH_MODE"
+echo "Zenoh session mode: $ZENOH_MODE (ROVER_ZENOH_MODE_VDA5050)"
 
 # Normalize a balenaCloud boolean the same way the other services do: unset or empty falls back
 # to $2, and anything that is not true/1/yes/on (any case) is false.
@@ -193,14 +194,14 @@ norm_bool() {
   esac
 }
 
-ROVER_START_VDA5050=$(norm_bool "${ROVER_START_VDA5050:-}" false)
+ROVER_VDA5050_ENABLE=$(norm_bool "${ROVER_VDA5050_ENABLE:-}" false)
 ROVER_VDA5050_LOCAL_BROKER=$(norm_bool "${ROVER_VDA5050_LOCAL_BROKER:-}" true)
-ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
+ROVER_SYSTEM_USE_GPS=$(norm_bool "${ROVER_SYSTEM_USE_GPS:-}" false)
 
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
 # service. Changing any balenaCloud variable restarts the container, which re-reads them.
-if [ "$ROVER_START_VDA5050" != true ]; then
-  echo "VDA 5050 disabled (ROVER_START_VDA5050=false); idling (sshd on 26 stays up)"
+if [ "$ROVER_VDA5050_ENABLE" != true ]; then
+  echo "VDA 5050 disabled (ROVER_VDA5050_ENABLE=false); idling (sshd on 26 stays up)"
   # Not `exec sleep infinity`: exec would drop the TERM trap and orphan sshd.
   wait "$SSHD_PID" || true
   terminate_children
@@ -213,9 +214,9 @@ BROKER_PORT=${ROVER_VDA5050_BROKER_PORT:-1883}
 # Orders are sent as rover_mission_manager missions in Nav 2's global frame, which follows
 # rover-a1-orchestrator's localization source (its start.sh): odom for 'odom', map for the rest.
 # ROVER_VDA5050_MAP_FRAME overrides the derived value.
-if [ -n "${ROVER_LOCALIZATION_SOURCE:-}" ]; then
-  LOCALIZATION_SOURCE=$ROVER_LOCALIZATION_SOURCE
-elif [ "$ROVER_USE_GPS" = true ]; then
+if [ -n "${ROVER_ORCH_LOCALIZATION_SOURCE:-}" ]; then
+  LOCALIZATION_SOURCE=$ROVER_ORCH_LOCALIZATION_SOURCE
+elif [ "$ROVER_SYSTEM_USE_GPS" = true ]; then
   LOCALIZATION_SOURCE=gps
 else
   LOCALIZATION_SOURCE=odom
@@ -263,8 +264,8 @@ fi
 pkill -f ros2_daemon || true
 sleep 1
 
-if [ "$(norm_bool "${ROVER_START_MISSION_MANAGER:-}" false)" != true ]; then
-  echo "WARNING: ROVER_START_MISSION_MANAGER=false - rover-a1-orchestrator runs no rover_mission_manager, so every VDA 5050 order is refused"
+if [ "$(norm_bool "${ROVER_ORCH_MISSION_MANAGER:-}" false)" != true ]; then
+  echo "WARNING: ROVER_ORCH_MISSION_MANAGER=false - rover-a1-orchestrator runs no rover_mission_manager, so every VDA 5050 order is refused"
 fi
 
 # **VDA 5050 connector - Background**
@@ -278,9 +279,9 @@ LAUNCH_ARGS=(
   serial_number:="${ROVER_VDA5050_SERIAL_NUMBER:-rover_a1}"
   map_frame:="${MAP_FRAME}"
 )
-# Unset or empty = unnamespaced; the launch file then reads ROVER_NAMESPACE itself.
-if [ -n "${ROVER_NAMESPACE:-}" ]; then
-  LAUNCH_ARGS+=(namespace:="${ROVER_NAMESPACE}")
+# Unset or empty = unnamespaced; the launch file then reads ROVER_SYSTEM_NAMESPACE itself.
+if [ -n "${ROVER_SYSTEM_NAMESPACE:-}" ]; then
+  LAUNCH_ARGS+=(namespace:="${ROVER_SYSTEM_NAMESPACE}")
 fi
 if [ -n "${ROVER_VDA5050_BROKER_USER:-}" ]; then
   LAUNCH_ARGS+=(broker_username:="${ROVER_VDA5050_BROKER_USER}")

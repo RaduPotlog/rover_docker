@@ -23,12 +23,12 @@ CHILD_PIDS=()
 # stayed up (about 13 MB/day idle, far more if a fault spams) and was overwritten when it restarted,
 # which also destroyed the log of whatever crashed it; ~/.ros/log gained an entry for every
 # process start and every `ros2` CLI call, forever.
-#   ROVER_LOG_MAX_MB          size at which a log is rotated (default 20)
-#   ROVER_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
-#   ROVER_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
-#   ROVER_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
-ROVER_LOG_MAX_BYTES=$(( ${ROVER_LOG_MAX_MB:-20} * 1024 * 1024 ))
-ROVER_LOG_BACKUP_COUNT=${ROVER_LOG_BACKUPS:-3}
+#   ROVER_SYSTEM_LOG_MAX_MB          size at which a log is rotated (default 20)
+#   ROVER_SYSTEM_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
+#   ROVER_SYSTEM_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
+#   ROVER_SYSTEM_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
+ROVER_LOG_MAX_BYTES=$(( ${ROVER_SYSTEM_LOG_MAX_MB:-20} * 1024 * 1024 ))
+ROVER_LOG_BACKUP_COUNT=${ROVER_SYSTEM_LOG_BACKUPS:-3}
 
 # Copies stdin to FILE and keeps it below MAX_BYTES: when the next line would not fit, FILE becomes
 # FILE.1, FILE.1 becomes FILE.2 ... and the oldest of BACKUPS copies is dropped. A FILE left over
@@ -95,14 +95,15 @@ rotating_log() {
   exec python3 -u -c "$ROVER_ROTATING_LOG_PY" "$@"
 }
 
-# Delete ros logs older than ROVER_ROS_LOG_KEEP_DAYS, then the oldest ones until the directory is
-# below ROVER_ROS_LOG_MAX_MB. Called before anything is launched, so no live log is touched.
+# Delete ros logs older than ROVER_SYSTEM_ROS_LOG_KEEP_DAYS, then the oldest ones until the
+# directory is below ROVER_SYSTEM_ROS_LOG_MAX_MB. Called before anything is launched, so no live
+# log is touched.
 prune_ros_logs() {
   local - dir days max_mb entry
   set +x  # the size loop would flood the container log
   dir=${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}
-  days=${ROVER_ROS_LOG_KEEP_DAYS:-7}
-  max_mb=${ROVER_ROS_LOG_MAX_MB:-300}
+  days=${ROVER_SYSTEM_ROS_LOG_KEEP_DAYS:-7}
+  max_mb=${ROVER_SYSTEM_ROS_LOG_MAX_MB:-300}
   [ -d "$dir" ] || return 0
   find "$dir" -mindepth 1 -maxdepth 1 -mtime +"$days" -exec rm -rf {} + 2>/dev/null || true
   while [ "$(du -sm "$dir" 2>/dev/null | cut -f1)" -gt "$max_mb" ] 2>/dev/null; do
@@ -169,8 +170,8 @@ SSHD_PID=$!
 CHILD_PIDS+=("$SSHD_PID")
 echo "sshd started on port 23 (PID: $SSHD_PID)"
 
-# **Zenoh session mode** for every ROS process this container starts (ROVER_ZENOH_MODE; unset or
-# empty means client).
+# **Zenoh session mode** for every ROS process this container starts
+# (ROVER_ZENOH_MODE_SENSORS; unset or empty means client).
 # Set before the idle gate below, so SSH shells get the CLI settings even while this
 # container idles.
 #   peer: rmw_zenoh's default - each process also links directly to the other peers. The
@@ -187,20 +188,20 @@ echo "sshd started on port 23 (PID: $SSHD_PID)"
 #   do both by default.
 # The ros2 CLI in an SSH shell is always a client with a 5 s timeout (.bashrc sources
 # /tmp/rover_zenoh_cli.env): it fails fast while the router is down and stays out of the mesh.
-case "${ROVER_ZENOH_MODE:-client}" in
-  [Pp][Ee][Ee][Rr]) ROVER_ZENOH_MODE=peer ;;
-  [Cc][Ll][Ii][Ee][Nn][Tt]) ROVER_ZENOH_MODE=client ;;
-  *) ROVER_ZENOH_MODE=client ;;
+case "${ROVER_ZENOH_MODE_SENSORS:-client}" in
+  [Pp][Ee][Ee][Rr]) ZENOH_MODE=peer ;;
+  [Cc][Ll][Ii][Ee][Nn][Tt]) ZENOH_MODE=client ;;
+  *) ZENOH_MODE=client ;;
 esac
 ZENOH_ROUTER_ENDPOINT="tcp/127.0.0.1:7447"
 ZENOH_CLIENT_BASE="mode=\"client\";connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];listen/endpoints=[]"
-if [ "$ROVER_ZENOH_MODE" = client ]; then
+if [ "$ZENOH_MODE" = client ]; then
   export ZENOH_CONFIG_OVERRIDE="${ZENOH_CLIENT_BASE};connect/timeout_ms=-1;connect/retry={period_init_ms:500,period_max_ms:2000,period_increase_factor:2}"
 else
   unset ZENOH_CONFIG_OVERRIDE
 fi
 printf "export ZENOH_CONFIG_OVERRIDE='%s'\n" "${ZENOH_CLIENT_BASE};connect/timeout_ms=5000" > /tmp/rover_zenoh_cli.env
-echo "Zenoh session mode: $ROVER_ZENOH_MODE"
+echo "Zenoh session mode: $ZENOH_MODE (ROVER_ZENOH_MODE_SENSORS)"
 
 # Normalize a balenaCloud boolean the same way the other rover containers do: unset or empty
 # falls back to $2, and anything that is not true/1/yes/on (any case) is false.
@@ -211,23 +212,23 @@ norm_bool() {
   esac
 }
 
-ROVER_START_SENSORS=$(norm_bool "${ROVER_START_SENSORS:-}" false)
+ROVER_SENSORS_ENABLE=$(norm_bool "${ROVER_SENSORS_ENABLE:-}" false)
 # One switch for GPS on the whole rover: the driver here, GPS fusion in rover-a1-platform.
-ROVER_USE_GPS=$(norm_bool "${ROVER_USE_GPS:-}" false)
-ROVER_USE_LIDAR=$(norm_bool "${ROVER_USE_LIDAR:-}" false)
-ROVER_USE_CAMERA=$(norm_bool "${ROVER_USE_CAMERA:-}" false)
+ROVER_SYSTEM_USE_GPS=$(norm_bool "${ROVER_SYSTEM_USE_GPS:-}" false)
+ROVER_SYSTEM_USE_LIDAR=$(norm_bool "${ROVER_SYSTEM_USE_LIDAR:-}" false)
+ROVER_SYSTEM_USE_CAMERA=$(norm_bool "${ROVER_SYSTEM_USE_CAMERA:-}" false)
 # fmoc person tracking (rover_perception) for follow-me; rover_perception.launch.py reads it from
 # the environment. The follow_me node itself runs in rover-a1-orchestrator.
-ROVER_START_FOLLOW_ME=$(norm_bool "${ROVER_START_FOLLOW_ME:-}" false)
-export ROVER_START_FOLLOW_ME
+ROVER_SYSTEM_FOLLOW_ME_ENABLE=$(norm_bool "${ROVER_SYSTEM_FOLLOW_ME_ENABLE:-}" false)
+export ROVER_SYSTEM_FOLLOW_ME_ENABLE
 
 # With no driver selected the launch has nothing to run and exits at once, so that case is
 # treated as disabled too.
 DISABLED_REASON=""
-if [ "$ROVER_START_SENSORS" != true ]; then
-  DISABLED_REASON="ROVER_START_SENSORS=false"
-elif [ "$ROVER_USE_GPS" != true ] && [ "$ROVER_USE_LIDAR" != true ] && [ "$ROVER_USE_CAMERA" != true ]; then
-  DISABLED_REASON="ROVER_USE_GPS, ROVER_USE_LIDAR and ROVER_USE_CAMERA all false (no driver to run)"
+if [ "$ROVER_SENSORS_ENABLE" != true ]; then
+  DISABLED_REASON="ROVER_SENSORS_ENABLE=false"
+elif [ "$ROVER_SYSTEM_USE_GPS" != true ] && [ "$ROVER_SYSTEM_USE_LIDAR" != true ] && [ "$ROVER_SYSTEM_USE_CAMERA" != true ]; then
+  DISABLED_REASON="ROVER_SYSTEM_USE_GPS, ROVER_SYSTEM_USE_LIDAR and ROVER_SYSTEM_USE_CAMERA all false (no driver to run)"
 fi
 
 # Idle rather than exit when disabled: `restart: always` would otherwise crash-loop this
@@ -244,7 +245,7 @@ fi
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /root/ros2_ws/rover_a1/install/setup.bash
 
-# Join the Zenoh graph (as a client, see ROVER_ZENOH_MODE above). The router runs in
+# Join the Zenoh graph (as a client, see ROVER_ZENOH_MODE_SENSORS above). The router runs in
 # rover-a1-zenoh-router; every service is network_mode: host, so it is reachable on loopback. No
 # ZENOH_ROUTER_CONFIG_URI - a second router would fight the first one for port 7447.
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
@@ -263,28 +264,28 @@ if [ "$ZENOH_ROUTER_READY" != true ]; then
   echo "WARNING: Zenoh router (127.0.0.1:7447, rover-a1-zenoh-router) not reachable after 60 s; starting anyway"
 fi
 
-ROVER_NAMESPACE=${ROVER_NAMESPACE:-}
+ROVER_SYSTEM_NAMESPACE=${ROVER_SYSTEM_NAMESPACE:-}
 # `namespace:=` only when there is one: `ros2 launch` rejects an empty `name:=` ("malformed launch
 # argument") and exits at once, which would crash-loop this service on an unnamespaced rover
-# (rover-a1-vda5050 did, 2026-09-28). The launch files default namespace to ROVER_NAMESPACE.
+# (rover-a1-vda5050 did, 2026-09-28). The launch files default namespace to ROVER_SYSTEM_NAMESPACE.
 NAMESPACE_ARG=()
-if [ -n "$ROVER_NAMESPACE" ]; then
-  NAMESPACE_ARG=(namespace:="${ROVER_NAMESPACE}")
+if [ -n "$ROVER_SYSTEM_NAMESPACE" ]; then
+  NAMESPACE_ARG=(namespace:="${ROVER_SYSTEM_NAMESPACE}")
 fi
 
 # **Sensor drivers - Background**
 set -m  # own process group, so stop_launch_groups can signal its nodes
 nohup ros2 launch rover_sensors_bringup rover_sensors.launch.py \
   "${NAMESPACE_ARG[@]}" \
-  use_gps:="${ROVER_USE_GPS}" \
-  use_lidar:="${ROVER_USE_LIDAR}" \
-  use_camera:="${ROVER_USE_CAMERA}" \
+  use_gps:="${ROVER_SYSTEM_USE_GPS}" \
+  use_lidar:="${ROVER_SYSTEM_USE_LIDAR}" \
+  use_camera:="${ROVER_SYSTEM_USE_CAMERA}" \
   > >(rotating_log /tmp/rover_sensors.log "$ROVER_LOG_MAX_BYTES" "$ROVER_LOG_BACKUP_COUNT") 2>&1 < /dev/null &
 SENSORS_PID=$!
 set +m
 LAUNCH_PGIDS+=("$SENSORS_PID")
 CHILD_PIDS+=("$SENSORS_PID")
-echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_USE_GPS, lidar=$ROVER_USE_LIDAR, camera=$ROVER_USE_CAMERA, person_tracking=$ROVER_START_FOLLOW_ME)"
+echo "Sensor payload started in background (PID: $SENSORS_PID, gps=$ROVER_SYSTEM_USE_GPS, lidar=$ROVER_SYSTEM_USE_LIDAR, camera=$ROVER_SYSTEM_USE_CAMERA, person_tracking=$ROVER_SYSTEM_FOLLOW_ME_ENABLE)"
 
 # **Supervise** - exit when the launch exits (crash or otherwise), so docker-compose's
 # `restart: always` (Balena) brings the drivers back up cleanly.

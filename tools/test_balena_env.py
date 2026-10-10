@@ -31,13 +31,15 @@ FLEET = 'g_potlog_radu/rovera1'
 COMPOSE = {
     'services': {
         'rover-a1-zenoh-router': {'environment': {
-            'ROVER_NAMESPACE': 'rover', 'ROVER_ZENOH_MODE': 'client', 'ROVER_NAV_MAP': None}},
+            'ROVER_SYSTEM_NAMESPACE': 'rover', 'ROVER_X_MODE': 'client',
+            'ROVER_ORCH_NAV_MAP': None}},
         'rover-a1-platform': {'environment': {
-            'ROVER_NAMESPACE': 'rover', 'ROVER_ZENOH_MODE': 'peer', 'ROVER_NAV_MAP': None,
-            'ROVER_DRIVE_PASSWORD': None}},
+            'ROVER_SYSTEM_NAMESPACE': 'rover', 'ROVER_X_MODE': 'peer', 'ROVER_ORCH_NAV_MAP': None,
+            'ROVER_UI_PASSWORD': None}},
         'rover-a1-sensors': {'environment': {
-            'ROVER_NAMESPACE': 'rover', 'ROVER_ZENOH_MODE': 'client', 'ROVER_NAV_MAP': None,
-            'ROVER_CAMERA_FPS': '15', 'ROVER_USE_CAMERA': False}},
+            'ROVER_SYSTEM_NAMESPACE': 'rover', 'ROVER_X_MODE': 'client',
+            'ROVER_ORCH_NAV_MAP': None, 'ROVER_SENSORS_CAMERA_FPS': '15',
+            'ROVER_SYSTEM_USE_CAMERA': False}},
         'rover-a1-network': {'environment': {
             'ROVER_NETWORK_ENABLE': 'true', 'NETUI_PORT': '5080', 'NETUI_PASSWORD': None}},
     }
@@ -78,9 +80,25 @@ class FakeRunner:
 
 def test_shared_variable_is_all_services_with_majority_default():
     e = entries()
-    assert e[('ROVER_ZENOH_MODE', 'device', '*')].default == 'client'
-    assert e[('ROVER_ZENOH_MODE', 'device', 'rover-a1-platform')].default == 'peer'
-    assert ('ROVER_ZENOH_MODE', 'device', 'rover-a1-sensors') not in e
+    assert e[('ROVER_X_MODE', 'device', '*')].default == 'client'
+    assert e[('ROVER_X_MODE', 'device', 'rover-a1-platform')].default == 'peer'
+    assert ('ROVER_X_MODE', 'device', 'rover-a1-sensors') not in e
+
+
+def test_real_compose_zenoh_modes_are_plain_all_services_entries():
+    entries_ = be.load_compose(be.DEFAULT_COMPOSE)[0]
+    zenoh = {e.key: e.default for e in entries_ if e.name.startswith('ROVER_ZENOH_MODE_')}
+    assert zenoh == {('ROVER_ZENOH_MODE_PLATFORM', 'device', '*'): 'peer',
+                     ('ROVER_ZENOH_MODE_ORCH', 'device', '*'): 'client',
+                     ('ROVER_ZENOH_MODE_SENSORS', 'device', '*'): 'client',
+                     ('ROVER_ZENOH_MODE_VDA5050', 'device', '*'): 'client'}
+
+
+def test_real_compose_names_follow_the_scope_schema():
+    names = {e.name for e in be.load_compose(be.DEFAULT_COMPOSE)[0]}
+    rover = {n for n in names if n.startswith('ROVER_')}
+    assert rover and all(be.group_of(n) != 'Other' for n in rover), \
+        sorted(n for n in rover if be.group_of(n) == 'Other')
 
 
 def test_network_only_variables_are_scoped_to_the_network_service():
@@ -88,37 +106,37 @@ def test_network_only_variables_are_scoped_to_the_network_service():
     assert ('ROVER_NETWORK_ENABLE', 'device', 'rover-a1-network') in e
     assert ('NETUI_PORT', 'device', 'rover-a1-network') in e
     # Declared by one ROS service only, but part of the shared ROVER_* list: all services.
-    assert ('ROVER_CAMERA_FPS', 'device', '*') in e
+    assert ('ROVER_SENSORS_CAMERA_FPS', 'device', '*') in e
 
 
 def test_values_start_unset_and_defaults_are_strings():
     e = entries()
     assert all(x.value is None for x in e.values())
-    assert e[('ROVER_USE_CAMERA', 'device', '*')].default == 'false'
-    assert e[('ROVER_NAV_MAP', 'device', '*')].default is None
+    assert e[('ROVER_SYSTEM_USE_CAMERA', 'device', '*')].default == 'false'
+    assert e[('ROVER_ORCH_NAV_MAP', 'device', '*')].default is None
 
 
 def test_secrets_and_extras():
     e = entries()
     assert e[('NETUI_PASSWORD', 'device', 'rover-a1-network')].secret
-    assert e[('ROVER_DRIVE_PASSWORD', 'device', '*')].secret
-    assert e[('ROVER_LAN_IP', 'device', '*')].default == '192.168.1.201'
+    assert e[('ROVER_UI_PASSWORD', 'device', '*')].secret
+    assert e[('ROVER_SYSTEM_LAN_IP', 'device', '*')].default == '192.168.1.201'
 
 
 # ------------------------------------------------------------------ YAML file
 
 def test_merge_keeps_user_values_scopes_and_extra_entries():
     fresh = be.entries_from_compose(COMPOSE)
-    old = [be.Entry('ROVER_NAMESPACE', 'r2', 'stale', level='fleet'),
-           be.Entry('ROVER_NAV_MAP', '/maps/a.yaml', service='rover-a1-sensors'),
+    old = [be.Entry('ROVER_SYSTEM_NAMESPACE', 'r2', 'stale', level='fleet'),
+           be.Entry('ROVER_ORCH_NAV_MAP', '/maps/a.yaml', service='rover-a1-sensors'),
            be.Entry('GONE_UNSET'),
            be.Entry('GONE_SET', 'x')]
     merged = {e.key: e for e in be.merge_entries(old, fresh)}
-    assert merged[('ROVER_NAMESPACE', 'fleet', '*')].value == 'r2'
-    assert merged[('ROVER_NAMESPACE', 'fleet', '*')].default == 'rover'
-    assert ('ROVER_NAMESPACE', 'device', '*') not in merged
-    assert merged[('ROVER_NAV_MAP', 'device', 'rover-a1-sensors')].value == '/maps/a.yaml'
-    assert ('ROVER_NAV_MAP', 'device', '*') in merged
+    assert merged[('ROVER_SYSTEM_NAMESPACE', 'fleet', '*')].value == 'r2'
+    assert merged[('ROVER_SYSTEM_NAMESPACE', 'fleet', '*')].default == 'rover'
+    assert ('ROVER_SYSTEM_NAMESPACE', 'device', '*') not in merged
+    assert merged[('ROVER_ORCH_NAV_MAP', 'device', 'rover-a1-sensors')].value == '/maps/a.yaml'
+    assert ('ROVER_ORCH_NAV_MAP', 'device', '*') in merged
     assert ('GONE_SET', 'device', '*') in merged
     assert ('GONE_UNSET', 'device', '*') not in merged
 
@@ -126,7 +144,7 @@ def test_merge_keeps_user_values_scopes_and_extra_entries():
 def test_save_load_roundtrip_never_stores_secrets(tmp_path):
     path = tmp_path / 'env.yaml'
     items = be.entries_from_compose(COMPOSE)
-    items.append(be.Entry('ROVER_USE_CAMERA', 'true', service='rover-a1-sensors'))
+    items.append(be.Entry('ROVER_SYSTEM_USE_CAMERA', 'true', service='rover-a1-sensors'))
     items[0].value = 'true'  # YAML must keep it a string
     secret = next(e for e in items if e.name == 'NETUI_PASSWORD')
     secret.value = 'hunter2'
@@ -163,14 +181,14 @@ def test_row_key_levels():
 
 
 def test_overlay_cloud_fills_values_retargets_level_and_appends_unknown():
-    rows = [row('ROVER_ZENOH_MODE', 'peer', service='rover-a1-platform'),
-            row('ROVER_NAMESPACE', 'r2', device='*'),
+    rows = [row('ROVER_X_MODE', 'peer', service='rover-a1-platform'),
+            row('ROVER_SYSTEM_NAMESPACE', 'r2', device='*'),
             row('NETUI_PASSWORD', 'hunter2', service='rover-a1-network'),
             row('START_SSHD', '1', device='*')]
     out = {e.key: e for e in be.overlay_cloud(be.entries_from_compose(COMPOSE), rows)}
-    assert out[('ROVER_ZENOH_MODE', 'device', 'rover-a1-platform')].value == 'peer'
-    assert out[('ROVER_NAMESPACE', 'fleet', '*')].value == 'r2'
-    assert ('ROVER_NAMESPACE', 'device', '*') not in out
+    assert out[('ROVER_X_MODE', 'device', 'rover-a1-platform')].value == 'peer'
+    assert out[('ROVER_SYSTEM_NAMESPACE', 'fleet', '*')].value == 'r2'
+    assert ('ROVER_SYSTEM_NAMESPACE', 'device', '*') not in out
     assert out[('NETUI_PASSWORD', 'device', 'rover-a1-network')].value is None
     assert out[('START_SSHD', 'fleet', '*')].value == '1'
 
@@ -186,8 +204,22 @@ def test_diff_add_update_same_and_extra():
 
 
 def test_scope_warnings_for_multi_reader_variables():
-    assert be.scope_warnings([be.Entry('ROVER_USE_GPS', 'true', service='rover-a1-sensors')])
-    assert not be.scope_warnings([be.Entry('ROVER_USE_GPS', 'true')])
+    assert be.scope_warnings([be.Entry('ROVER_SYSTEM_USE_GPS', 'true',
+                                       service='rover-a1-sensors')])
+    assert be.scope_warnings([be.Entry('ROVER_PLATFORM_ENABLE', 'false',
+                                       service='rover-a1-platform')])
+    assert not be.scope_warnings([be.Entry('ROVER_SYSTEM_USE_GPS', 'true')])
+    assert not be.scope_warnings([be.Entry('ROVER_ZENOH_MODE_PLATFORM', 'client',
+                                           service='rover-a1-platform')])
+
+
+def test_groups_follow_the_name_scope():
+    assert be.group_of('ROVER_SYSTEM_USE_GPS') == 'System (all services)'
+    assert be.group_of('ROVER_SYSTEM_MOUNT_IMU_X') == 'Sensor mount poses (all services)'
+    assert be.group_of('ROVER_ZENOH_MODE_ORCH') == 'Zenoh session mode'
+    assert be.group_of('ROVER_ORCH_DRIVE_MODE') == 'Orchestrator'
+    assert be.group_of('ROVER_UI_PORT') == 'Drive interface'
+    assert be.group_of('ROVER_NETWORK_ENABLE').startswith('Network')
 
 
 # ------------------------------------------------------------------ balena CLI wrapper
@@ -271,8 +303,8 @@ def test_write_yes_sets_only_changed_entries(tmp_path):
 
 def test_dump_then_diff_is_clean(tmp_path, capsys):
     env_file = tmp_path / 'env.yaml'
-    rows = [row('ROVER_ZENOH_MODE', 'peer', service='rover-a1-platform'),
-            row('ROVER_CAMERA_FPS', '6'), row('START_SSHD', '1', device='*')]
+    rows = [row('ROVER_X_MODE', 'peer', service='rover-a1-platform'),
+            row('ROVER_SENSORS_CAMERA_FPS', '6'), row('START_SSHD', '1', device='*')]
     cli = be.BalenaCli(FakeRunner(rows=rows))
     base = ['--file', str(env_file), '--compose', str(compose_file(tmp_path)),
             '--device', 'rovera1-001']
@@ -280,3 +312,123 @@ def test_dump_then_diff_is_clean(tmp_path, capsys):
     capsys.readouterr()
     assert be.main([*base, 'diff'], cli) == 0
     assert '0 to write, 3 already equal' in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ migrate (old names)
+# env-renames:begin - these tests feed the old names on purpose.
+
+RENAMES = be.load_renames(be.DEFAULT_RENAMES)
+
+
+def plan_of(rows):
+    return {(r.row['name'], r.entry.key, r.value, r.action)
+            for r in be.plan_renames(rows, RENAMES)}
+
+
+def test_renames_file_is_complete_and_targets_the_schema():
+    assert RENAMES['ROVER_START_DRIVE_MODE'] == ['ROVER_ORCH_DRIVE_MODE']
+    assert RENAMES['ROVER_DRIVE_PORT'] == ['ROVER_UI_PORT']
+    assert len(RENAMES['ROVER_ZENOH_MODE']) == 4
+    new = [n for names in RENAMES.values() for n in names]
+    assert len(new) == len(set(new))
+    assert all(be.group_of(n) != 'Other' for n in new)
+    assert not set(RENAMES) & set(new)
+
+
+def test_plan_keeps_value_level_and_service():
+    rows = [row('ROVER_START_NAVIGATION', 'true', device='*', id_=1),
+            row('ROVER_USE_GPS', 'true', id_=2),
+            row('ROVER_CAMERA_FPS', '6', service='rover-a1-sensors', id_=3),
+            row('START_SSHD', '1', id_=4)]
+    assert plan_of(rows) == {
+        ('ROVER_START_NAVIGATION', ('ROVER_ORCH_NAVIGATION', 'fleet', '*'), 'true', 'add'),
+        ('ROVER_USE_GPS', ('ROVER_SYSTEM_USE_GPS', 'device', '*'), 'true', 'add'),
+        ('ROVER_CAMERA_FPS', ('ROVER_SENSORS_CAMERA_FPS', 'device', 'rover-a1-sensors'), '6',
+         'add')}
+
+
+def test_plan_splits_zenoh_mode_per_container():
+    rows = [row('ROVER_ZENOH_MODE', 'client', id_=1),
+            row('ROVER_ZENOH_MODE', 'peer', service='rover-a1-platform', id_=2),
+            row('ROVER_ZENOH_MODE', 'client', service='rover-a1-zenoh-router', id_=3)]
+    assert plan_of(rows) == {
+        ('ROVER_ZENOH_MODE', ('ROVER_ZENOH_MODE_ORCH', 'device', '*'), 'client', 'add'),
+        ('ROVER_ZENOH_MODE', ('ROVER_ZENOH_MODE_SENSORS', 'device', '*'), 'client', 'add'),
+        ('ROVER_ZENOH_MODE', ('ROVER_ZENOH_MODE_VDA5050', 'device', '*'), 'client', 'add'),
+        ('ROVER_ZENOH_MODE', ('ROVER_ZENOH_MODE_PLATFORM', 'device', 'rover-a1-platform'),
+         'peer', 'add')}
+
+
+def test_plan_reports_same_and_conflict():
+    rows = [row('ROVER_NAV_MAP', '/maps/a.yaml', id_=1),
+            row('ROVER_ORCH_NAV_MAP', '/maps/a.yaml', id_=2),
+            row('ROVER_NAMESPACE', 'r2', id_=3),
+            row('ROVER_SYSTEM_NAMESPACE', 'r3', id_=4)]
+    assert plan_of(rows) == {
+        ('ROVER_NAV_MAP', ('ROVER_ORCH_NAV_MAP', 'device', '*'), '/maps/a.yaml', 'same'),
+        ('ROVER_NAMESPACE', ('ROVER_SYSTEM_NAMESPACE', 'device', '*'), 'r2', 'conflict')}
+
+
+def migrate_main(tmp_path, rows, *extra):
+    env_file = tmp_path / 'env.yaml'
+    items = be.entries_from_compose(COMPOSE) + [be.Entry('ROVER_START_NAVIGATION', 'true')]
+    be.save_config(env_file, be.Config(FLEET, UUID, items))
+    runner = FakeRunner(rows=rows)
+    args = ['--file', str(env_file), '--compose', str(compose_file(tmp_path)), 'migrate', *extra]
+    return be.main(args, be.BalenaCli(runner)), runner, env_file
+
+
+def test_migrate_dry_run_changes_nothing(tmp_path):
+    code, runner, env_file = migrate_main(
+        tmp_path, [row('ROVER_START_NAVIGATION', 'true')], '--dry-run')
+    assert code == 0
+    assert not [c for c in runner.calls if c[0][1:3] in (['env', 'set'], ['env', 'rm'])]
+    assert 'ROVER_START_NAVIGATION' in env_file.read_text()
+
+
+def test_migrate_sets_new_removes_old_and_renames_the_yaml(tmp_path):
+    rows = [row('ROVER_START_NAVIGATION', 'true', id_=1),
+            row('ROVER_DRIVE_PASSWORD', 's3cret', id_=2),
+            row('ROVER_NAMESPACE', 'r2', id_=3),
+            row('ROVER_SYSTEM_NAMESPACE', 'r3', id_=4)]
+    code, runner, env_file = migrate_main(tmp_path, rows, '--yes')
+    assert code == 0
+    sets = {c[0][3]: c for c in runner.calls if c[0][1:3] == ['env', 'set']}
+    assert set(sets) == {'ROVER_ORCH_NAVIGATION', 'ROVER_UI_PASSWORD'}
+    argv, env = sets['ROVER_UI_PASSWORD']
+    assert 's3cret' not in argv and env['ROVER_UI_PASSWORD'] == 's3cret'
+    removed = [c[0][3] for c in runner.calls if c[0][1:3] == ['env', 'rm']]
+    assert sorted(removed) == ['1', '2']  # the conflicting ROVER_NAMESPACE (3) stays
+    text = env_file.read_text()
+    assert 'ROVER_START_NAVIGATION' not in text and 's3cret' not in text
+    loaded = {e.key: e.value for e in be.load_config(env_file).entries}
+    assert loaded[('ROVER_ORCH_NAVIGATION', 'device', '*')] == 'true'
+
+
+def test_migrate_keeps_old_variable_when_setting_the_new_one_fails(tmp_path):
+    rows = [row('ROVER_START_NAVIGATION', 'true', id_=1)]
+    env_file = tmp_path / 'env.yaml'
+    be.save_config(env_file, be.Config(FLEET, UUID, be.entries_from_compose(COMPOSE)))
+
+    class FailSet(FakeRunner):
+        def __call__(self, argv, capture_output, text, env):
+            proc = super().__call__(argv, capture_output, text, env)
+            if argv[1:3] == ['env', 'set']:
+                proc.returncode = 1
+            return proc
+
+    runner = FailSet(rows=rows)
+    args = ['--file', str(env_file), '--compose', str(compose_file(tmp_path)), 'migrate', '--yes']
+    assert be.main(args, be.BalenaCli(runner)) == 1
+    assert not [c for c in runner.calls if c[0][1:3] == ['env', 'rm']]
+
+
+def test_rename_entries_prefers_the_entry_with_a_value():
+    items = [be.Entry('ROVER_ORCH_NAV_MAP'), be.Entry('ROVER_NAV_MAP', '/maps/a.yaml'),
+             be.Entry('ROVER_ZENOH_MODE', 'peer', service='rover-a1-platform')]
+    out = {e.key: e.value for e in be.rename_entries(items, RENAMES)}
+    assert out[('ROVER_ORCH_NAV_MAP', 'device', '*')] == '/maps/a.yaml'
+    assert out[('ROVER_ZENOH_MODE_PLATFORM', 'device', 'rover-a1-platform')] == 'peer'
+    assert not any(k[0] in RENAMES for k in out)
+
+# env-renames:end

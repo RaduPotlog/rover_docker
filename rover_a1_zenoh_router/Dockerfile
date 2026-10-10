@@ -16,9 +16,9 @@
 #
 # Its own service so it outlives the containers that use it. The ROS processes in
 # rover-a1-orchestrator and rover-a1-sensors are Zenoh clients of this router, and
-# rover-a1-platform's peers reach them through it (ROVER_ZENOH_MODE, see README.md), so all
-# traffic between containers passes through it. It used to run inside rover-a1-platform, where
-# it restarted whenever any platform process exited and on every platform image update, taking
+# rover-a1-platform's peers reach them through it (ROVER_ZENOH_MODE_<CONTAINER>, see
+# README.md), so all traffic between containers passes through it. It used to run inside
+# rover-a1-platform, where it restarted whenever any platform process exited and on every platform image update, taking
 # the whole graph down with it. This image only changes when the ROS release does, so a balena
 # release leaves the router running.
 #

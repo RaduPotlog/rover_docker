@@ -262,7 +262,7 @@ drive-interface 25 and vda5050 26. Use the shell of the container you are debugg
 ssh -p 23 root@<rover-lan-ip>       # sensors: GNSS + lidar drivers
 ```
 
-As in the orchestrator, `start.sh` starts sshd ahead of the `ROVER_START_SENSORS` gate, so the
+As in the orchestrator, `start.sh` starts sshd ahead of the `ROVER_SENSORS_ENABLE` gate, so the
 shell is up while the payload idles, and a dead sshd restarts the service. The caveats above
 (image-default password, host keys shared per build) apply here too, as does everything in
 [Claude Code and ros-mcp on every shell](#claude-code-and-ros-mcp-on-every-shell): this image
@@ -279,7 +279,7 @@ in. It is built for one rover and indoor navigation.
   foxglove_bridge on `127.0.0.1:8765`. Both sit behind the same basic-auth login, because
   foxglove_bridge itself has no authentication. The container runs no ROS.
 - **Driving modes** (owned by `rover_drive_mode` in `rover-a1-orchestrator`, shared by every
-  browser; the rover boots in `ROVER_DRIVE_DEFAULT_MODE`, `assisted` by default):
+  browser; the rover boots in `ROVER_ORCH_DRIVE_DEFAULT_MODE`, `assisted` by default):
   - **Manual:** the joystick goes straight to the platform, no obstacle check.
   - **Assisted:** the joystick goes through a lidar collision monitor that slows the rover
     down and then stops it in front of an obstacle. With no lidar data it blocks all motion.
@@ -297,9 +297,9 @@ in. It is built for one rover and indoor navigation.
   link latency (a round trip through `/rosapi/get_time`).
 - **Map view:** shows the occupancy map, the lidar scan, the Nav 2 plan and the rover. Tools:
   **Set pose** (AMCL `initialpose`) and **Go to** (`rover_mission_manager` `set_mission`), plus
-  **Stop**. These need `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`,
+  **Stop**. These need `ROVER_ORCH_NAVIGATION=true` and `ROVER_ORCH_MISSION_MANAGER=true`,
   and Go to needs the Automatic driving mode.
-- **Places and Facility** (indoor mode only, `ROVER_LOCALIZATION_SOURCE=indoor`):
+- **Places and Facility** (indoor mode only, `ROVER_ORCH_LOCALIZATION_SOURCE=indoor`):
   1. Record a map with **Start mapping**.
   2. **Save map as…** a name.
   3. **Load** it (AMCL).
@@ -318,7 +318,7 @@ ssh -p 25 root@<rover-lan-ip>       # drive interface: nginx, /tmp/nginx.conf, /
 `start.sh` starts sshd before its gates and supervises it together with nginx: if either
 exits, the container restarts.
 
-When `ROVER_DRIVE_ENABLE=false`, or `ROVER_DRIVE_PASSWORD` is unset, the container **idles**
+When `ROVER_UI_ENABLE=false`, or `ROVER_UI_PASSWORD` is unset, the container **idles**
 with only sshd running instead of exiting. It leaves `/tmp/drive-interface-idle`, which the
 healthcheck accepts, so balenaEngine does not restart the idle container as unhealthy. The
 caveats of the other shells apply here too: an image-default password, and host keys shared
@@ -328,14 +328,14 @@ per build. The image runs no ROS itself, but carries `claude` and `ros-mcp` like
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `ROVER_DRIVE_ENABLE` | `true` | `false` = the container idles (sshd on 25 only). |
-| `ROVER_DRIVE_PORT` | `5000` | Port nginx binds (plain http). |
-| `ROVER_DRIVE_USER` | `rover` | Login user. |
-| `ROVER_DRIVE_PASSWORD` | *(unset)* | Required. Without it nginx is not started and the container idles (sshd only), logging an error. |
-| `ROVER_DRIVE_MAX_LINEAR` / `_ANGULAR` | `1.0` / `1.0` | 100 % speed preset in m/s / rad/s; the presets are 20/50/80/100 % of it. The drive controller clamps at 1.2 m/s, 1.0 rad/s. |
-| `ROVER_DRIVE_MAX_RIM_SPEED` / `_TRACK_WIDTH` | `1.7` / `1.0204` | Outer-wheel rim-speed budget (m/s) and effective track width (m), as `max_wheel_rim_speed` / `effective_track_width` in rover_crsf_teleop.yaml: above the budget v and w are scaled together, keeping the arc. `0` disables the limit. |
-| `ROVER_DRIVE_EXPO_LINEAR` / `_ANGULAR` | `0.3` / `0.5` | Stick expo per axis, `0` (linear) to `1` (softest): small stick moves give much less speed, full stick is still full speed. Out-of-range values fall back to the default. |
-| `ROVER_DRIVE_AUX_OUTPUT_NAMES` / `ROVER_DRIVE_AUX_INPUT_NAMES` | unset | Names for the six aux outputs (PLC DIO00..05) and inputs (DIO06..11) in the Aux IO popup, comma-separated in order, e.g. `Beacon,Tool power,,,,`. A blank or missing entry keeps the default name ("Output 3" and so on). |
+| `ROVER_UI_ENABLE` | `true` | `false` = the container idles (sshd on 25 only). |
+| `ROVER_UI_PORT` | `5000` | Port nginx binds (plain http). |
+| `ROVER_UI_USER` | `rover` | Login user. |
+| `ROVER_UI_PASSWORD` | *(unset)* | Required. Without it nginx is not started and the container idles (sshd only), logging an error. |
+| `ROVER_UI_MAX_LINEAR` / `_ANGULAR` | `1.0` / `1.0` | 100 % speed preset in m/s / rad/s; the presets are 20/50/80/100 % of it. The drive controller clamps at 1.2 m/s, 1.0 rad/s. |
+| `ROVER_UI_MAX_RIM_SPEED` / `_TRACK_WIDTH` | `1.7` / `1.0204` | Outer-wheel rim-speed budget (m/s) and effective track width (m), as `max_wheel_rim_speed` / `effective_track_width` in rover_crsf_teleop.yaml: above the budget v and w are scaled together, keeping the arc. `0` disables the limit. |
+| `ROVER_UI_EXPO_LINEAR` / `_ANGULAR` | `0.3` / `0.5` | Stick expo per axis, `0` (linear) to `1` (softest): small stick moves give much less speed, full stick is still full speed. Out-of-range values fall back to the default. |
+| `ROVER_UI_AUX_OUTPUT_NAMES` / `ROVER_UI_AUX_INPUT_NAMES` | unset | Names for the six aux outputs (PLC DIO00..05) and inputs (DIO06..11) in the Aux IO popup, comma-separated in order, e.g. `Beacon,Tool power,,,,`. A blank or missing entry keeps the default name ("Output 3" and so on). |
 
 Limitations:
 
@@ -382,76 +382,44 @@ healthcheck accepts. The service runs as an unprivileged user and has no sshd.
 
 ## Device variables
 
-Every variable below is declared on **every** service in `docker-compose.yml`, so a fleet or
-device variable reaches whichever container reads it. The *read by* column names the services
-that actually act on the value; the others simply carry it. Defaults come from
+Every variable below is declared on **every** ROVER service in `docker-compose.yml`, so a fleet
+or device variable reaches whichever container reads it. Defaults come from
 `docker-compose.yml` or from each service's `start.sh`. Override them per device
 (balenaCloud → device → **Device Variables**) or per fleet (**Fleet Variables**).
 
+Names follow `ROVER_<SCOPE>_<THING>`:
+
+- **SCOPE = a container** (`PLATFORM`, `ORCH`, `SENSORS`, `UI` for the drive interface, `VDA5050`,
+  `NETWORK`): that container acts on it. Another container may read it too; the *Also read by*
+  column says so where it matters.
+- **SCOPE = `SYSTEM`**: several containers act on it. Always set a `ROVER_SYSTEM_*` variable for
+  **all services**, never scoped to one, so they agree.
+- The prefix follows the container that *runs* the thing, not the code's layer: terrain and
+  camera perception (`rover_perception`) run in `rover-a1-sensors`, next to the drivers, so they
+  are `ROVER_SENSORS_*`.
+- One exception: the Zenoh session mode is `ROVER_ZENOH_MODE_<CONTAINER>`, one per container,
+  grouped by name.
+
+The variables were renamed on 2026-10-10; see [Migrating from the old names](#migrating-from-the-old-names).
 Booleans accept `true`/`1`/`yes`/`on` in any case; anything else means false.
 
-### Stack toggles
+### System (`ROVER_SYSTEM_*`, all services)
 
 | Variable | Default | Read by | Effect |
 |----------|---------|---------|--------|
-| `ROVER_START_ROS_PLATFORM` | `true` | platform, orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. sshd and the web bridges still run (and the Zenoh router, in its own service). The orchestrator also stays idle, since there is no platform to drive. |
-| `ROVER_START_NAVIGATION` | `false` | orchestrator | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_START_ROS_PLATFORM=true`. Leave `false` when a companion controller runs the stack. |
-| `ROVER_START_MISSION_MANAGER` | `false` | orchestrator | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. The Automatic driving mode is refused without it. |
-| `ROVER_START_DRIVE_MODE` | `true` | orchestrator | Starts `rover_drive_mode` (driving modes + the Assisted lidar guard), even when `ROVER_START_NAVIGATION=false`. `false` leaves the drive UI's joystick connected to nothing. Requires `ROVER_START_ROS_PLATFORM=true`. |
-| `ROVER_DRIVE_DEFAULT_MODE` | `assisted` | orchestrator | Driving mode at boot: `assisted` or `manual`. Never `automatic`. |
-| `ROVER_START_SENSORS` | `false` | sensors | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_USE_GPS`, lidar with `ROVER_USE_LIDAR`). `false` idles the container. It also idles when both `ROVER_USE_GPS` and `ROVER_USE_LIDAR` are false, since there is no driver to run. |
+| `ROVER_SYSTEM_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
+| `ROVER_SYSTEM_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF; it publishes `map → odom` only with `ROVER_PLATFORM_GPS_MAP_TF=true`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
+| `ROVER_SYSTEM_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
+| `ROVER_SYSTEM_USE_CAMERA` | `false` | sensors, orchestrator | Starts the RealSense D435i driver (`rover_sensors`' `rover_realsense`) and the camera perception nodes in `rover-a1-sensors` (see [rover_perception](../src/rover_perception/README.md)), and publishes its depth cloud (`camera/depth/points`). It does not change Nav 2: the cloud joins the costmap only with `ROVER_ORCH_NAV_USE_CAMERA`; the orchestrator reads this variable just to warn about that combination. Counts as a driver for `ROVER_SENSORS_ENABLE`, so a camera-only payload does not idle. Needs USB access to the camera in the container. |
+| `ROVER_SYSTEM_FOLLOW_ME_ENABLE` | `false` | sensors, orchestrator | `true` starts follow-me: the `fmoc` person tracker in `rover-a1-sensors` (needs `ROVER_SYSTEM_USE_CAMERA=true` and the depth cloud, `ROVER_SENSORS_CAMERA_DEPTH_CLOUD`, on by default) and the `follow_me` node in `rover-a1-orchestrator`. Following drives through Nav 2's Following server, so it needs `ROVER_ORCH_NAVIGATION=true` and `ROVER_ORCH_MISSION_MANAGER=true` (AUTOMATIC needs the mission manager); the orchestrator warns when the mission manager or the camera is off. |
+| `ROVER_SYSTEM_LAN_IP` | `192.168.1.201` | zenoh-router | Rover LAN address `rover-a1-zenoh-router` binds. Not in `docker-compose.yml`; set it in balenaCloud to change it. |
+| `ROVER_SYSTEM_LOG_MAX_MB` / `ROVER_SYSTEM_LOG_BACKUPS` | `20` / `3` | platform, orchestrator, sensors, vda5050 | Size at which a container's process log in `/tmp` is rotated, and the rotated copies kept per log. Not in `docker-compose.yml`. |
+| `ROVER_SYSTEM_ROS_LOG_MAX_MB` / `ROVER_SYSTEM_ROS_LOG_KEEP_DAYS` | `300` / `7` | platform, orchestrator, sensors, vda5050 | `~/.ros/log` is trimmed at start: entries older than the days, then the oldest until under the size. Not in `docker-compose.yml`. |
+| `ROVER_SYSTEM_USE_SIM_TIME` | `false` | orchestrator | `true` only when the platform is `rover_gazebo` (Gazebo publishes `/clock`); never on the rover. Not in `docker-compose.yml`. |
 
-### VDA 5050
+See [Follow-me](#follow-me) for `ROVER_SYSTEM_FOLLOW_ME_ENABLE`.
 
-| Variable | Default | Read by | Effect |
-|----------|---------|---------|--------|
-| `ROVER_START_VDA5050` | `false` | vda5050 | `true` starts the VDA 5050 connector. Orders drive through `rover_mission_manager`, so they also need `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true` on the orchestrator, and the rover in the Automatic driving mode. |
-| `ROVER_VDA5050_LOCAL_BROKER` | `true` | vda5050 | Run Mosquitto in the container (1883, WebSockets 9001, anonymous). `false` when master control brings its own broker. |
-| `ROVER_VDA5050_BROKER_HOST` / `_PORT` | `127.0.0.1` / `1883` | vda5050 | The broker the connector uses. |
-| `ROVER_VDA5050_BROKER_USER` / `_PASSWORD` | unset | vda5050 | Broker login. A user also switches the connector to TLS (CA bundle from `VDA5050_CONNECTOR_TLS_CA_CERT`, default the system bundle). |
-| `ROVER_VDA5050_BROKER_TLS` | `auto` | vda5050 | `auto`: TLS when a user is set. `false`: user/password without TLS, for a broker reached through WireGuard. `true`: always TLS. |
-| `ROVER_VDA5050_MANUFACTURER` / `_SERIAL_NUMBER` | `MechatronicsAcademy` / `rover_a1` | vda5050 | VDA 5050 identity; topics are `uagv/v2/<manufacturer>/<serial>/…`. |
-| `ROVER_VDA5050_MAP_FRAME` | unset | vda5050 | Nav 2 frame the order coordinates are in (prefixed with the namespace). Unset follows the orchestrator's localization source like its `start.sh` does: `odom` for odom, `map` for gps/slam/amcl/indoor. |
-
-See [VDA 5050](#vda-5050) for what the interface supports.
-
-### Follow-me
-
-| Variable | Default | Read by | Effect |
-|----------|---------|---------|--------|
-| `ROVER_START_FOLLOW_ME` | `false` | sensors, orchestrator | `true` starts follow-me: the `fmoc` person tracker in `rover-a1-sensors` (needs `ROVER_USE_CAMERA=true` and the depth cloud, `ROVER_CAMERA_DEPTH_CLOUD`, on by default) and the `follow_me` node in `rover-a1-orchestrator`. Following drives through Nav 2's Following server, so it needs `ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true` (AUTOMATIC needs the mission manager); the orchestrator warns when the mission manager or the camera is off. |
-
-See [Follow-me](#follow-me).
-
-### Robot configuration
-
-| Variable | Default | Read by | Effect |
-|----------|---------|---------|--------|
-| `ROVER_NAMESPACE` | `rover` | all | ROS namespace (see [ROS namespace](#ros-namespace)). Keep it equal across services. |
-| `ROVER_ZENOH_MODE` | platform `peer`, orchestrator and sensors `client` | platform, orchestrator, sensors | How each container's ROS processes join the graph. `peer`: direct links between processes, plus one to the router. `client`: one link each, to `rover-a1-zenoh-router`. The split keeps the platform's control loops independent of the router, which stalls for up to a minute while cleaning up after an orchestrator restart. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh) before changing it. |
-| `ROVER_USE_GPS` | `false` | sensors, platform, orchestrator | One switch for GPS. `true`: `rover-a1-sensors` starts the RUTX11 GNSS driver (`gps/fix`, `GPS fix` diagnostics) and the platform fuses it (`rover_gps_heading` alignment, `navsat_transform`, global EKF; it publishes `map → odom` only with `ROVER_GPS_PUBLISH_MAP_TF=true`). `false`: no GPS driver, EKF on wheel odometry + IMU only. In the orchestrator it selects Nav 2's `localization_source` (`gps` vs `odom`). |
-| `ROVER_GPS_PUBLISH_MAP_TF` | `false` | platform, orchestrator | Only matters with `ROVER_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
-| `ROVER_USE_LIDAR` | `false` | sensors, orchestrator | Starts the RoboSense RS16 driver in `rover-a1-sensors`. Leave `false` on rovers with no lidar fitted. The orchestrator logs a warning when it is false: both Nav 2 costmaps mark and clear from `<namespace>/scan`, so navigation would drive blind. |
-| `ROVER_USE_CAMERA` | `false` | sensors, orchestrator | Starts the RealSense D435i driver (`rover_sensors`' `rover_realsense`) and the camera perception nodes in `rover-a1-sensors` (see [rover_perception](../src/rover_perception/README.md)), and publishes its depth cloud (`camera/depth/points`). It does not change Nav 2: the cloud joins the costmap only with `ROVER_NAV_USE_CAMERA`; the orchestrator reads this variable just to warn about that combination. Counts as a driver for `ROVER_START_SENSORS`, so a camera-only payload does not idle. Needs USB access to the camera in the container. |
-| `ROVER_NAV_USE_CAMERA` | `false` | orchestrator | Adds the depth cloud (`camera/depth/points`) as a second source of the **local** Nav 2 costmap. Needs `ROVER_USE_CAMERA=true` (the orchestrator warns otherwise). Leave it off until the camera mount (`ROVER_CAMERA_*`) is measured: with a wrong mount the camera marks obstacles in the wrong place. `false` keeps the lidar scan as the only source. |
-| `ROVER_CAMERA_DEPTH_CLOUD` | `true` | sensors | With `ROVER_USE_CAMERA=true`: publish the depth image as a `PointCloud2` (`camera/depth/points`), for the costmap with `ROVER_NAV_USE_CAMERA` and for follow-me's person tracker (CPU only). |
-| `ROVER_CAMERA_FIDUCIALS` | `false` | sensors | With `ROVER_USE_CAMERA=true`: AprilTag (36h11) detection on the colour stream. The tag size in `rover_perception_bringup/config/apriltag.yaml` is an assumption until measured. |
-| `ROVER_CAMERA_DETECTION` | `false` | sensors | With `ROVER_USE_CAMERA=true`: YOLO object detection on the colour stream (`detections`, `vision_msgs/Detection2DArray`). Needs `ROVER_CAMERA_DETECTION_MODEL`. |
-| `ROVER_CAMERA_DETECTION_MODEL` | *(unset)* | sensors | Path inside the container of a YOLOv8/v11 `.onnx` file, for example on a volume. Without it the detector refuses to configure and logs why. |
-| `ROVER_CAMERA_DETECTION_GPU` | `false` | sensors | `true` asks ONNX Runtime for CUDA. The rover image ships CPU `onnxruntime` only, so this is for a GPU host. |
-| `ROVER_USE_TERRAIN` | `false` | sensors | Ground slope from the lidar cloud (`terrain/incline`, `terrain/ground_confidence`). Independent of the camera; needs `ROVER_USE_LIDAR=true`. |
-| `ROVER_CAMERA_FPS` | `15` | sensors | Frame rate of the colour and depth streams; the D435i only accepts `6`, `15` or `30` at these resolutions. The first knob to lower on a loaded controller, since every consumer scales with it. On the dev laptop `6` with `ROVER_CAMERA_FIDUCIALS_DECIMATE=4.0` cut the stack from 20.6 % to 7.0 % of one core. |
-| `ROVER_CAMERA_DEPTH_PROFILE` | `424x240` | sensors | Depth resolution. The point cloud, and with it the Nav 2 costmap work (with `ROVER_NAV_USE_CAMERA`), grows with the pixel count: `424x240` is about 100 k points, `848x480` four times that. |
-| `ROVER_CAMERA_FIDUCIALS_DECIMATE` | `2.0` | sensors | AprilTag image decimation; higher is cheaper and detects at shorter range. About half a core on a Pi 5 at 15 fps and `2.0` (estimate). |
-| `ROVER_CAMERA_DETECTION_MAX_RATE` | `10.0` | sensors | Upper bound on detections per second (Hz). Use `2`-`3` on a CPU-only controller. The input resolution comes from the exported `.onnx` model, so export a 320 px model for a cheaper detector. |
-| `ROVER_FOXGLOVE_TOPIC_WHITELIST` | *(unset)* | platform | `foxglove_bridge`'s `topic_whitelist`. Unset: only the topics the drive UI uses (listed in `rover_bringup/launch/rover_web_bridges.launch.py`), because anything a browser subscribes to crosses the Zenoh router at full rate. Set `['.*']` to see the whole graph in Foxglove Studio while debugging. |
-| `ROVER_FOXGLOVE_SERVICE_WHITELIST` | *(unset)* | platform | `foxglove_bridge`'s `service_whitelist`. Unset: only the services the drive UI calls (listed in `rover_bringup/launch/rover_web_bridges.launch.py`). Otherwise the bridge advertises every service on the graph and logs a warning for each one whose package isn't in the platform image (slam_toolbox, the voxel layer). A UI can only call a service the bridge advertises. Set `['.*']` to reach every service from Foxglove Studio while debugging. |
-| `ROVER_LAN_IP` | `192.168.1.201` | zenoh-router | Rover LAN address the Zenoh router binds. Not in `docker-compose.yml`; set it in balenaCloud to change it. |
-| `ROVER_LOCALIZATION_SOURCE` | *(unset)* | orchestrator | Optional. `odom`, `gps`, `slam`, `amcl` or `indoor`, overriding the `ROVER_USE_GPS` mapping. `slam` (slam_toolbox), `amcl` (nav2_amcl) and `indoor` all require `ROVER_USE_GPS=false` or `ROVER_GPS_PUBLISH_MAP_TF=false` — exactly one process may publish `map → odom`. `amcl` localizes on a fixed `ROVER_NAV_MAP` and needs `ROVER_USE_LIDAR=true`. **`indoor`** is the mode for the [drive interface](#drive-interface): `rover_indoor_nav_manager` runs slam_toolbox while you record a map and map_server + AMCL on a saved one, switching at runtime; maps, places and the last pose live in the `rover-maps` volume (`/maps/<name>/`), and `ROVER_NAV_MAP` / `ROVER_AMCL_INITIAL_POSE_*` are ignored. An unrecognized value is ignored with a warning. |
-| `ROVER_NAV_MAP` | *(unset)* | orchestrator | Optional path to a map yaml inside the container; defaults to `rover_navigation`'s `empty_world.yaml`. **Required with `ROVER_LOCALIZATION_SOURCE=amcl`** — AMCL cannot localize against the empty default, so build a map with `=slam` first and point this at `/maps/map.yaml`. |
-| `ROVER_AMCL_INITIAL_POSE_X` / `_Y` / `_YAW` | `0.0` | orchestrator | Pose AMCL is seeded with at startup, in the map frame. The default is correct only when the map origin is where the rover parks, i.e. the slam run started there. Find it with `ros2 run tf2_ros tf2_echo rover/map rover/base_link`. |
-
-### Sensor mount poses
+#### Sensor mount poses (`ROVER_SYSTEM_MOUNT_*`)
 
 Read by `rover_description` in `rover-a1-platform`, relative to `body_link`
 (x forward, y left, z up). Declared in `docker-compose.yml` but left **unset**, so the URDF
@@ -460,18 +428,87 @@ warning in `/tmp/rover_bringup.log`.
 
 | Variable | Default |
 |----------|---------|
-| `ROVER_IMU_LOCALIZATION_X` / `_Y` / `_Z` [m] | `-0.09` / `0.0` / `0.2` |
-| `ROVER_IMU_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
-| `ROVER_GPS_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0` |
-| `ROVER_GPS_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
-| `ROVER_LIDAR_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0` |
-| `ROVER_LIDAR_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
-| `ROVER_CAMERA_LOCALIZATION_X` / `_Y` / `_Z` [m] | `0.25` / `0.0` / `0.2` (assumed, not measured) |
-| `ROVER_CAMERA_ORIENTATION_R` / `_P` / `_Y` [rad] | `0` |
+| `ROVER_SYSTEM_MOUNT_IMU_X` / `_Y` / `_Z` [m] | `-0.09` / `0.0` / `0.2` |
+| `ROVER_SYSTEM_MOUNT_IMU_ROLL` / `_PITCH` / `_YAW` [rad] | `3.14159` / `0` / `0` (mounted upside down) |
+| `ROVER_SYSTEM_MOUNT_GPS_X` / `_Y` / `_Z` [m] | `0` |
+| `ROVER_SYSTEM_MOUNT_GPS_ROLL` / `_PITCH` / `_YAW` [rad] | `0` |
+| `ROVER_SYSTEM_MOUNT_LIDAR_X` / `_Y` / `_Z` [m] | `0` |
+| `ROVER_SYSTEM_MOUNT_LIDAR_ROLL` / `_PITCH` / `_YAW` [rad] | `0` |
+| `ROVER_SYSTEM_MOUNT_CAMERA_X` / `_Y` / `_Z` [m] | `0.25` / `0.0` / `0.2` (assumed, not measured) |
+| `ROVER_SYSTEM_MOUNT_CAMERA_ROLL` / `_PITCH` / `_YAW` [rad] | `0` |
+
+### Zenoh session mode (`ROVER_ZENOH_MODE_*`)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ROVER_ZENOH_MODE_PLATFORM` / `_ORCH` / `_SENSORS` / `_VDA5050` | `peer` / `client` / `client` / `client` | How that container's ROS processes join the graph. `peer`: direct links between processes, plus one to the router. `client`: one link each, to `rover-a1-zenoh-router`. The split keeps the platform's control loops independent of the router, which stalls for up to a minute while cleaning up after an orchestrator restart. See [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh) before changing one. |
+
+### Platform (`ROVER_PLATFORM_*`)
+
+| Variable | Default | Also read by | Effect |
+|----------|---------|--------------|--------|
+| `ROVER_PLATFORM_ENABLE` | `true` | orchestrator | `false` skips `ros2 launch rover_bringup rover_bringup.launch.py`. sshd and the web bridges still run (and the Zenoh router, in its own service). The orchestrator also stays idle, since there is no platform to drive, so set it for **all services**. |
+| `ROVER_PLATFORM_GPS_MAP_TF` | `false` | orchestrator | Only matters with `ROVER_SYSTEM_USE_GPS=true`. `true`: the global EKF broadcasts `map → odom`. `false`: it keeps fusing GPS and publishing `odometry/global` but leaves `map → odom` to slam_toolbox or AMCL. The orchestrator warns when this is `false` with `localization_source=gps`, since then nothing publishes `map → odom`. Set it as an all-services variable. |
+| `ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST` | *(unset)* | | `foxglove_bridge`'s `topic_whitelist`. Unset: only the topics the drive UI uses (listed in `rover_bringup/launch/rover_web_bridges.launch.py`), because anything a browser subscribes to crosses the Zenoh router at full rate. Set `['.*']` to see the whole graph in Foxglove Studio while debugging. |
+| `ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST` | *(unset)* | | `foxglove_bridge`'s `service_whitelist`. Unset: only the services the drive UI calls (listed in `rover_bringup/launch/rover_web_bridges.launch.py`). Otherwise the bridge advertises every service on the graph and logs a warning for each one whose package isn't in the platform image (slam_toolbox, the voxel layer). A UI can only call a service the bridge advertises. Set `['.*']` to reach every service from Foxglove Studio while debugging. |
+
+### Orchestrator (`ROVER_ORCH_*`)
+
+| Variable | Default | Also read by | Effect |
+|----------|---------|--------------|--------|
+| `ROVER_ORCH_NAVIGATION` | `false` | | `true` starts the autonomy stack (`rover_navigation` → Nav 2) on this device. Requires `ROVER_PLATFORM_ENABLE=true`. Leave `false` when a companion controller runs the stack. |
+| `ROVER_ORCH_MISSION_MANAGER` | `false` | vda5050 | `true` also starts `rover_mission_manager` on top of Nav 2. Only consulted when the orchestrator stack starts at all. The Automatic driving mode is refused without it. |
+| `ROVER_ORCH_DRIVE_MODE` | `true` | | Starts `rover_drive_mode` (driving modes + the Assisted lidar guard), even when `ROVER_ORCH_NAVIGATION=false`. `false` leaves the drive UI's joystick connected to nothing. Requires `ROVER_PLATFORM_ENABLE=true`. |
+| `ROVER_ORCH_DRIVE_DEFAULT_MODE` | `assisted` | | Driving mode at boot: `assisted` or `manual`. Never `automatic`. |
+| `ROVER_ORCH_LOCALIZATION_SOURCE` | *(unset)* | sensors, vda5050 | Optional. `odom`, `gps`, `slam`, `amcl` or `indoor`, overriding the `ROVER_SYSTEM_USE_GPS` mapping. `slam` (slam_toolbox), `amcl` (nav2_amcl) and `indoor` all require `ROVER_SYSTEM_USE_GPS=false` or `ROVER_PLATFORM_GPS_MAP_TF=false` — exactly one process may publish `map → odom`. `amcl` localizes on a fixed `ROVER_ORCH_NAV_MAP` and needs `ROVER_SYSTEM_USE_LIDAR=true`. **`indoor`** is the mode for the [drive interface](#drive-interface): `rover_indoor_nav_manager` runs slam_toolbox while you record a map and map_server + AMCL on a saved one, switching at runtime; maps, places and the last pose live in the `rover-maps` volume (`/maps/<name>/`), and `ROVER_ORCH_NAV_MAP` / `ROVER_ORCH_AMCL_INITIAL_POSE_*` are ignored. An unrecognized value is ignored with a warning. |
+| `ROVER_ORCH_NAV_MAP` | *(unset)* | | Optional path to a map yaml inside the container; defaults to `rover_navigation`'s `empty_world.yaml`. **Required with `ROVER_ORCH_LOCALIZATION_SOURCE=amcl`** — AMCL cannot localize against the empty default, so build a map with `=slam` first and point this at `/maps/map.yaml`. |
+| `ROVER_ORCH_NAV_USE_CAMERA` | `false` | | Adds the depth cloud (`camera/depth/points`) as a second source of the **local** Nav 2 costmap. Needs `ROVER_SYSTEM_USE_CAMERA=true` (the orchestrator warns otherwise). Leave it off until the camera mount (`ROVER_SYSTEM_MOUNT_CAMERA_*`) is measured: with a wrong mount the camera marks obstacles in the wrong place. `false` keeps the lidar scan as the only source. |
+| `ROVER_ORCH_AMCL_INITIAL_POSE_X` / `_Y` / `_YAW` | `0.0` | | Pose AMCL is seeded with at startup, in the map frame. The default is correct only when the map origin is where the rover parks, i.e. the slam run started there. Find it with `ros2 run tf2_ros tf2_echo rover/map rover/base_link`. |
+
+### Sensors (`ROVER_SENSORS_*`)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ROVER_SENSORS_ENABLE` | `false` | `true` starts the sensor payload in `rover-a1-sensors` (GNSS with `ROVER_SYSTEM_USE_GPS`, lidar with `ROVER_SYSTEM_USE_LIDAR`). `false` idles the container. It also idles when both `ROVER_SYSTEM_USE_GPS` and `ROVER_SYSTEM_USE_LIDAR` are false, since there is no driver to run. |
+| `ROVER_SENSORS_CAMERA_DEPTH_CLOUD` | `true` | With `ROVER_SYSTEM_USE_CAMERA=true`: publish the depth image as a `PointCloud2` (`camera/depth/points`), for the costmap with `ROVER_ORCH_NAV_USE_CAMERA` and for follow-me's person tracker (CPU only). |
+| `ROVER_SENSORS_CAMERA_FIDUCIALS` | `false` | With `ROVER_SYSTEM_USE_CAMERA=true`: AprilTag (36h11) detection on the colour stream. The tag size in `rover_perception_bringup/config/apriltag.yaml` is an assumption until measured. |
+| `ROVER_SENSORS_CAMERA_DETECTION` | `false` | With `ROVER_SYSTEM_USE_CAMERA=true`: YOLO object detection on the colour stream (`detections`, `vision_msgs/Detection2DArray`). Needs `ROVER_SENSORS_CAMERA_DETECTION_MODEL`. |
+| `ROVER_SENSORS_CAMERA_DETECTION_MODEL` | *(unset)* | Path inside the container of a YOLOv8/v11 `.onnx` file, for example on a volume. Without it the detector refuses to configure and logs why. |
+| `ROVER_SENSORS_CAMERA_DETECTION_GPU` | `false` | `true` asks ONNX Runtime for CUDA. The rover image ships CPU `onnxruntime` only, so this is for a GPU host. |
+| `ROVER_SENSORS_CAMERA_FPS` | `15` | Frame rate of the colour and depth streams; the D435i only accepts `6`, `15` or `30` at these resolutions. The first knob to lower on a loaded controller, since every consumer scales with it. On the dev laptop `6` with `ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE=4.0` cut the stack from 20.6 % to 7.0 % of one core. |
+| `ROVER_SENSORS_CAMERA_DEPTH_PROFILE` | `424x240` | Depth resolution. The point cloud, and with it the Nav 2 costmap work (with `ROVER_ORCH_NAV_USE_CAMERA`), grows with the pixel count: `424x240` is about 100 k points, `848x480` four times that. |
+| `ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE` | `2.0` | AprilTag image decimation; higher is cheaper and detects at shorter range. About half a core on a Pi 5 at 15 fps and `2.0` (estimate). |
+| `ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE` | `10.0` | Upper bound on detections per second (Hz). Use `2`-`3` on a CPU-only controller. The input resolution comes from the exported `.onnx` model, so export a 320 px model for a cheaper detector. |
+| `ROVER_SENSORS_TERRAIN` | `false` | Ground slope from the lidar cloud (`terrain/incline`, `terrain/ground_confidence`). Independent of the camera; needs `ROVER_SYSTEM_USE_LIDAR=true`. |
+
+### Drive interface (`ROVER_UI_*`)
+
+See [Drive interface variables](#drive-interface-variables).
+
+### VDA 5050 (`ROVER_VDA5050_*`)
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `ROVER_VDA5050_ENABLE` | `false` | `true` starts the VDA 5050 connector. Orders drive through `rover_mission_manager`, so they also need `ROVER_ORCH_NAVIGATION=true` and `ROVER_ORCH_MISSION_MANAGER=true` on the orchestrator, and the rover in the Automatic driving mode. |
+| `ROVER_VDA5050_LOCAL_BROKER` | `true` | Run Mosquitto in the container (1883, WebSockets 9001, anonymous). `false` when master control brings its own broker. |
+| `ROVER_VDA5050_BROKER_HOST` / `_PORT` | `127.0.0.1` / `1883` | The broker the connector uses. |
+| `ROVER_VDA5050_BROKER_USER` / `_PASSWORD` | unset | Broker login. A user also switches the connector to TLS (CA bundle from `VDA5050_CONNECTOR_TLS_CA_CERT`, default the system bundle). |
+| `ROVER_VDA5050_BROKER_TLS` | `auto` | `auto`: TLS when a user is set. `false`: user/password without TLS, for a broker reached through WireGuard. `true`: always TLS. |
+| `ROVER_VDA5050_MANUFACTURER` / `_SERIAL_NUMBER` | `MechatronicsAcademy` / `rover_a1` | VDA 5050 identity; topics are `uagv/v2/<manufacturer>/<serial>/…`. |
+| `ROVER_VDA5050_MAP_FRAME` | unset | Nav 2 frame the order coordinates are in (prefixed with the namespace). Unset follows the orchestrator's localization source like its `start.sh` does: `odom` for odom, `map` for gps/slam/amcl/indoor. |
+
+See [VDA 5050](#vda-5050) for what the interface supports.
+
+### Network (`ROVER_NETWORK_*`)
+
+See [Network uplink page](#network-uplink-page). Its variables are scoped to
+`rover-a1-network` only.
+
+### Setting variables
 
 ```bash
-balena env set ROVER_START_ROS_PLATFORM false --device <device-uuid> --service rover-a1-platform
-balena env set ROVER_START_NAVIGATION true --device <device-uuid> --service rover-a1-orchestrator
+balena env set ROVER_PLATFORM_ENABLE false --device <device-uuid>
+balena env set ROVER_ORCH_NAVIGATION true --device <device-uuid> --service rover-a1-orchestrator
 ```
 
 Changing a variable restarts the affected containers automatically, and `start.sh` re-reads
@@ -479,14 +516,14 @@ the value on the next start. There is no image rebuild, but expect roughly 15–
 for `rover-a1-platform`, with its web bridges down during that time. A variable scoped to one
 service restarts only that service; an all-services device variable restarts every service.
 
-Note that `ROVER_START_ROS_PLATFORM` is read by two services. Scoping it to `rover-a1-platform`
+Note that `ROVER_PLATFORM_ENABLE` is read by two services. Scoping it to `rover-a1-platform`
 alone stops the bringup but leaves the orchestrator believing it is still running — set it as
-an all-services variable, or set `ROVER_START_NAVIGATION=false` alongside it.
-`ROVER_USE_GPS` is read by three services (sensors: driver, platform: fusion, orchestrator:
-`localization_source`); set it as an all-services variable so they agree.
+an all-services variable, or set `ROVER_ORCH_NAVIGATION=false` alongside it. Every
+`ROVER_SYSTEM_*` variable is read by several services (`ROVER_SYSTEM_USE_GPS`: sensors driver,
+platform fusion, orchestrator `localization_source`), so set each as an all-services variable.
 
 With the defaults only `rover-a1-platform` runs its stack; the orchestrator and the sensor
-payload idle until `ROVER_START_NAVIGATION` / `ROVER_START_SENSORS` are set to `true`.
+payload idle until `ROVER_ORCH_NAVIGATION` / `ROVER_SENSORS_ENABLE` are set to `true`.
 
 ### Managing variables with `tools/balena_env.py`
 
@@ -501,6 +538,7 @@ tools/balena_env.py dump               # balenaCloud -> YAML
 tools/balena_env.py diff               # YAML vs balenaCloud
 tools/balena_env.py write --dry-run    # what a write would set; drop --dry-run to set it (asks first)
 tools/balena_env.py init               # after editing docker-compose.yml; keeps your values
+tools/balena_env.py migrate --dry-run  # old variable names still on balenaCloud -> new names
 ```
 
 `device: null` in the YAML means the fleet's only device; `--device`/`--fleet` override it.
@@ -508,6 +546,103 @@ A write sets only entries whose value differs from balenaCloud and never removes
 expect the restarts described above. Passwords are never stored in the file: set them with
 **Set a secret** in the menu, which hands the value to the CLI through its environment, not its
 command line. Tests: `python3 -m pytest tools/test_balena_env.py`.
+
+### Migrating from the old names
+
+<!-- env-renames:begin -->
+On 2026-10-10 every variable moved to the `ROVER_<SCOPE>_<THING>` names above, as a hard rename:
+the containers no longer read the old names, so a device keeps an old variable's value only
+once it is renamed on balenaCloud. `tools/env_renames.yaml` is the map (it also drives
+`tools/rename_env_vars.py`, which did the rename in the source repos).
+
+1. Before deploying, `tools/balena_env.py dump` records what balenaCloud holds (old names).
+2. Push the release. Until step 3 the containers run on the compose defaults.
+3. `tools/balena_env.py migrate --dry-run`, then `tools/balena_env.py migrate`. For each old
+   variable it sets the new one with the same value, level and service (secrets through the
+   CLI's environment), then asks before removing the old ones. A new name that already holds a
+   different value is a *conflict*: both are kept, and the old one is not removed, until you
+   settle it. `ROVER_ZENOH_MODE` becomes the four `ROVER_ZENOH_MODE_*`: an all-services value
+   goes to each, a service-scoped one to that container's.
+
+| Old name | New name |
+|----------|----------|
+| `ROVER_NAMESPACE` | `ROVER_SYSTEM_NAMESPACE` |
+| `ROVER_LAN_IP` | `ROVER_SYSTEM_LAN_IP` |
+| `ROVER_USE_GPS` | `ROVER_SYSTEM_USE_GPS` |
+| `ROVER_USE_LIDAR` | `ROVER_SYSTEM_USE_LIDAR` |
+| `ROVER_USE_CAMERA` | `ROVER_SYSTEM_USE_CAMERA` |
+| `ROVER_USE_SIM_TIME` | `ROVER_SYSTEM_USE_SIM_TIME` |
+| `ROVER_LOG_MAX_MB` | `ROVER_SYSTEM_LOG_MAX_MB` |
+| `ROVER_LOG_BACKUPS` | `ROVER_SYSTEM_LOG_BACKUPS` |
+| `ROVER_ROS_LOG_MAX_MB` | `ROVER_SYSTEM_ROS_LOG_MAX_MB` |
+| `ROVER_ROS_LOG_KEEP_DAYS` | `ROVER_SYSTEM_ROS_LOG_KEEP_DAYS` |
+| `ROVER_START_FOLLOW_ME` | `ROVER_SYSTEM_FOLLOW_ME_ENABLE` |
+| `ROVER_IMU_LOCALIZATION_X` | `ROVER_SYSTEM_MOUNT_IMU_X` |
+| `ROVER_IMU_LOCALIZATION_Y` | `ROVER_SYSTEM_MOUNT_IMU_Y` |
+| `ROVER_IMU_LOCALIZATION_Z` | `ROVER_SYSTEM_MOUNT_IMU_Z` |
+| `ROVER_IMU_ORIENTATION_R` | `ROVER_SYSTEM_MOUNT_IMU_ROLL` |
+| `ROVER_IMU_ORIENTATION_P` | `ROVER_SYSTEM_MOUNT_IMU_PITCH` |
+| `ROVER_IMU_ORIENTATION_Y` | `ROVER_SYSTEM_MOUNT_IMU_YAW` |
+| `ROVER_GPS_LOCALIZATION_X` | `ROVER_SYSTEM_MOUNT_GPS_X` |
+| `ROVER_GPS_LOCALIZATION_Y` | `ROVER_SYSTEM_MOUNT_GPS_Y` |
+| `ROVER_GPS_LOCALIZATION_Z` | `ROVER_SYSTEM_MOUNT_GPS_Z` |
+| `ROVER_GPS_ORIENTATION_R` | `ROVER_SYSTEM_MOUNT_GPS_ROLL` |
+| `ROVER_GPS_ORIENTATION_P` | `ROVER_SYSTEM_MOUNT_GPS_PITCH` |
+| `ROVER_GPS_ORIENTATION_Y` | `ROVER_SYSTEM_MOUNT_GPS_YAW` |
+| `ROVER_LIDAR_LOCALIZATION_X` | `ROVER_SYSTEM_MOUNT_LIDAR_X` |
+| `ROVER_LIDAR_LOCALIZATION_Y` | `ROVER_SYSTEM_MOUNT_LIDAR_Y` |
+| `ROVER_LIDAR_LOCALIZATION_Z` | `ROVER_SYSTEM_MOUNT_LIDAR_Z` |
+| `ROVER_LIDAR_ORIENTATION_R` | `ROVER_SYSTEM_MOUNT_LIDAR_ROLL` |
+| `ROVER_LIDAR_ORIENTATION_P` | `ROVER_SYSTEM_MOUNT_LIDAR_PITCH` |
+| `ROVER_LIDAR_ORIENTATION_Y` | `ROVER_SYSTEM_MOUNT_LIDAR_YAW` |
+| `ROVER_CAMERA_LOCALIZATION_X` | `ROVER_SYSTEM_MOUNT_CAMERA_X` |
+| `ROVER_CAMERA_LOCALIZATION_Y` | `ROVER_SYSTEM_MOUNT_CAMERA_Y` |
+| `ROVER_CAMERA_LOCALIZATION_Z` | `ROVER_SYSTEM_MOUNT_CAMERA_Z` |
+| `ROVER_CAMERA_ORIENTATION_R` | `ROVER_SYSTEM_MOUNT_CAMERA_ROLL` |
+| `ROVER_CAMERA_ORIENTATION_P` | `ROVER_SYSTEM_MOUNT_CAMERA_PITCH` |
+| `ROVER_CAMERA_ORIENTATION_Y` | `ROVER_SYSTEM_MOUNT_CAMERA_YAW` |
+| `ROVER_ZENOH_MODE` | `ROVER_ZENOH_MODE_PLATFORM`, `ROVER_ZENOH_MODE_ORCH`, `ROVER_ZENOH_MODE_SENSORS`, `ROVER_ZENOH_MODE_VDA5050` |
+| `ROVER_START_ROS_PLATFORM` | `ROVER_PLATFORM_ENABLE` |
+| `ROVER_GPS_PUBLISH_MAP_TF` | `ROVER_PLATFORM_GPS_MAP_TF` |
+| `ROVER_FOXGLOVE_TOPIC_WHITELIST` | `ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST` |
+| `ROVER_FOXGLOVE_SERVICE_WHITELIST` | `ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST` |
+| `ROVER_START_NAVIGATION` | `ROVER_ORCH_NAVIGATION` |
+| `ROVER_START_MISSION_MANAGER` | `ROVER_ORCH_MISSION_MANAGER` |
+| `ROVER_START_DRIVE_MODE` | `ROVER_ORCH_DRIVE_MODE` |
+| `ROVER_DRIVE_DEFAULT_MODE` | `ROVER_ORCH_DRIVE_DEFAULT_MODE` |
+| `ROVER_LOCALIZATION_SOURCE` | `ROVER_ORCH_LOCALIZATION_SOURCE` |
+| `ROVER_NAV_MAP` | `ROVER_ORCH_NAV_MAP` |
+| `ROVER_NAV_USE_CAMERA` | `ROVER_ORCH_NAV_USE_CAMERA` |
+| `ROVER_AMCL_INITIAL_POSE_X` | `ROVER_ORCH_AMCL_INITIAL_POSE_X` |
+| `ROVER_AMCL_INITIAL_POSE_Y` | `ROVER_ORCH_AMCL_INITIAL_POSE_Y` |
+| `ROVER_AMCL_INITIAL_POSE_YAW` | `ROVER_ORCH_AMCL_INITIAL_POSE_YAW` |
+| `ROVER_START_SENSORS` | `ROVER_SENSORS_ENABLE` |
+| `ROVER_CAMERA_DEPTH_CLOUD` | `ROVER_SENSORS_CAMERA_DEPTH_CLOUD` |
+| `ROVER_CAMERA_DEPTH_PROFILE` | `ROVER_SENSORS_CAMERA_DEPTH_PROFILE` |
+| `ROVER_CAMERA_FPS` | `ROVER_SENSORS_CAMERA_FPS` |
+| `ROVER_CAMERA_FIDUCIALS` | `ROVER_SENSORS_CAMERA_FIDUCIALS` |
+| `ROVER_CAMERA_FIDUCIALS_DECIMATE` | `ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE` |
+| `ROVER_CAMERA_DETECTION` | `ROVER_SENSORS_CAMERA_DETECTION` |
+| `ROVER_CAMERA_DETECTION_MODEL` | `ROVER_SENSORS_CAMERA_DETECTION_MODEL` |
+| `ROVER_CAMERA_DETECTION_GPU` | `ROVER_SENSORS_CAMERA_DETECTION_GPU` |
+| `ROVER_CAMERA_DETECTION_MAX_RATE` | `ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE` |
+| `ROVER_USE_TERRAIN` | `ROVER_SENSORS_TERRAIN` |
+| `ROVER_DRIVE_ENABLE` | `ROVER_UI_ENABLE` |
+| `ROVER_DRIVE_PORT` | `ROVER_UI_PORT` |
+| `ROVER_DRIVE_USER` | `ROVER_UI_USER` |
+| `ROVER_DRIVE_PASSWORD` | `ROVER_UI_PASSWORD` |
+| `ROVER_DRIVE_MAX_LINEAR` | `ROVER_UI_MAX_LINEAR` |
+| `ROVER_DRIVE_MAX_ANGULAR` | `ROVER_UI_MAX_ANGULAR` |
+| `ROVER_DRIVE_MAX_RIM_SPEED` | `ROVER_UI_MAX_RIM_SPEED` |
+| `ROVER_DRIVE_TRACK_WIDTH` | `ROVER_UI_TRACK_WIDTH` |
+| `ROVER_DRIVE_EXPO_LINEAR` | `ROVER_UI_EXPO_LINEAR` |
+| `ROVER_DRIVE_EXPO_ANGULAR` | `ROVER_UI_EXPO_ANGULAR` |
+| `ROVER_DRIVE_AUX_OUTPUT_NAMES` | `ROVER_UI_AUX_OUTPUT_NAMES` |
+| `ROVER_DRIVE_AUX_INPUT_NAMES` | `ROVER_UI_AUX_INPUT_NAMES` |
+| `ROVER_DRIVE_BRIDGE` | `ROVER_UI_BRIDGE` |
+| `ROVER_DRIVE_ROBOT_NAME` | `ROVER_UI_ROBOT_NAME` |
+| `ROVER_START_VDA5050` | `ROVER_VDA5050_ENABLE` |
+<!-- env-renames:end -->
 
 ## Where the orchestrator runs
 
@@ -518,17 +653,17 @@ server, SLAM map autosaver) and `rover_mission_manager` (behavior-tree mission s
 dispatching Nav 2 actions).
 
 It also holds `rover_drive_mode`, the driving modes the drive UI switches between (Manual,
-Assisted, Automatic). That starts whenever `ROVER_START_ROS_PLATFORM` and
-`ROVER_START_DRIVE_MODE` (default `true`) are both true, independent of Nav 2, because the drive
+Assisted, Automatic). That starts whenever `ROVER_PLATFORM_ENABLE` and
+`ROVER_ORCH_DRIVE_MODE` (default `true`) are both true, independent of Nav 2, because the drive
 UI's joystick reaches the platform only through it. Nav 2 starts only when **both** hold:
 
-| `ROVER_START_ROS_PLATFORM` | `ROVER_START_NAVIGATION` | Result |
+| `ROVER_PLATFORM_ENABLE` | `ROVER_ORCH_NAVIGATION` | Result |
 |---|---|---|
-| `true` | `true` | Nav 2 starts (+ mission manager with `ROVER_START_MISSION_MANAGER=true`) |
-| `true` | `false` | drive modes only — Manual and Assisted work, Automatic is refused. When a companion controller runs the stack, run `rover_drive_mode` on exactly one of the two devices (`ROVER_START_DRIVE_MODE=false` on the other): two managers would both route the joystick |
+| `true` | `true` | Nav 2 starts (+ mission manager with `ROVER_ORCH_MISSION_MANAGER=true`) |
+| `true` | `false` | drive modes only — Manual and Assisted work, Automatic is refused. When a companion controller runs the stack, run `rover_drive_mode` on exactly one of the two devices (`ROVER_ORCH_DRIVE_MODE=false` on the other): two managers would both route the joystick |
 | `false` | *any* | idle — no platform bringup to drive or navigate with |
 
-The table assumes `ROVER_START_DRIVE_MODE=true` (the default). With it `false`, the second row
+The table assumes `ROVER_ORCH_DRIVE_MODE=true` (the default). With it `false`, the second row
 idles too, and the first runs Nav 2 without driving modes: the drive UI cannot drive, and the
 mission manager refuses every mission, because nothing ever reports AUTOMATIC.
 
@@ -537,9 +672,9 @@ it, and the balena logs carry a single line naming the reason. sshd starts ahead
 gate, so an idle container is still reachable on 24 — which is when a shell tends to be
 most useful. Changing any of the variables restarts the container, which re-evaluates them.
 
-To run the stack on a companion controller, leave `ROVER_START_NAVIGATION=false` on the rover,
+To run the stack on a companion controller, leave `ROVER_ORCH_NAVIGATION=false` on the rover,
 then build and run `rover_autonomy` on the companion computer and join the rover's Zenoh
-router over the rover LAN (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)). Keep `ROVER_NAMESPACE` and the
+router over the rover LAN (see [ROS 2 over the rover LAN](#ros-2-over-the-rover-lan-zenoh)). Keep `ROVER_SYSTEM_NAMESPACE` and the
 chosen `localization_source` identical on both sides.
 
 The container runs no Zenoh router of its own: host networking puts it in the same network
@@ -557,8 +692,8 @@ subtree with a short list of patches) plus the rover's adapter plugins. Orders b
 driving mode, the motion lock, a dead lidar, low battery. See that repository's README for the
 supported actions, the state mapping and how to test with its `fake_master.py`.
 
-Enable it with `ROVER_START_VDA5050=true` on a rover that also runs
-`ROVER_START_NAVIGATION=true` and `ROVER_START_MISSION_MANAGER=true`, then put the rover in
+Enable it with `ROVER_VDA5050_ENABLE=true` on a rover that also runs
+`ROVER_ORCH_NAVIGATION=true` and `ROVER_ORCH_MISSION_MANAGER=true`, then put the rover in
 Automatic from the drive UI. Master control publishes to `uagv/v2/<manufacturer>/<serial>/order`
 on the rover's broker (port 1883), or on its own broker with `ROVER_VDA5050_LOCAL_BROKER=false` and
 `ROVER_VDA5050_BROKER_HOST`. SSH: `ssh -p 26 root@<rover-lan-ip>`; the connector logs to
@@ -577,7 +712,7 @@ publishes `tracked_person`, so the depth cloud never leaves the container. In
 the collision monitor, drive mode and the motion lock like any Nav 2 motion; follow-me never
 publishes `cmd_vel`.
 
-Enable it with `ROVER_START_FOLLOW_ME=true` and `ROVER_USE_CAMERA=true` on a rover that runs Nav 2
+Enable it with `ROVER_SYSTEM_FOLLOW_ME_ENABLE=true` and `ROVER_SYSTEM_USE_CAMERA=true` on a rover that runs Nav 2
 and the mission manager, in Automatic. Stand about 1.5 m in front of the stopped rover, then start
 following from the drive UI (Navigate tab, *Follow me*), with the VDA 5050 instant action
 `startFollowing` from fleet control, or with
@@ -590,7 +725,7 @@ doing. Logs: the `follow_me` node in `/tmp/rover_follow_me.log` on the orchestra
 
 ## ROS namespace
 
-`rover-a1-platform` runs every rover node under the namespace in `ROVER_NAMESPACE`
+`rover-a1-platform` runs every rover node under the namespace in `ROVER_SYSTEM_NAMESPACE`
 (default `rover`, set in `docker-compose.yml`, overridable as a balenaCloud
 variable), so rover topics and services are `/rover/cmd_vel`,
 `/rover/odom`, `/rover/led/state`, `/rover/hardware_interface/gpio_state`, …
@@ -606,7 +741,7 @@ The ROS 2 graph runs on `rmw_zenoh_cpp`. The Zenoh router runs in its own servic
 `rover-a1-zenoh-router`, as that container's only process. A platform restart or a balena
 release that doesn't touch its image leaves it (and so the graph) up. It listens on loopback
 and on the rover LAN address only (default `192.168.1.201`, override with the balenaCloud
-variable `ROVER_LAN_IP`). balenaVPN and GSM are deliberately not bound. The router has no
+variable `ROVER_SYSTEM_LAN_IP`). balenaVPN and GSM are deliberately not bound. The router has no
 authentication, so any host on the rover LAN can join the graph. It is configured with
 `ZENOH_CONFIG_OVERRIDE` on top of `rmw_zenoh_cpp`'s packaged router defaults, not with a json5
 file, which would replace those defaults wholesale.
@@ -615,13 +750,13 @@ If the LAN address isn't on the device within ~10 s of startup, the router
 falls back to loopback-only (logged as a `WARNING`) until the container
 restarts.
 
-The rover mixes the two ways a ROS process can join Zenoh, per container
-(`ROVER_ZENOH_MODE`):
+The rover mixes the two ways a ROS process can join Zenoh, one variable per container
+(`ROVER_ZENOH_MODE_PLATFORM`, `_ORCH`, `_SENSORS`, `_VDA5050`):
 
 - **`rover-a1-platform`: `peer`** (rmw_zenoh's default). Its processes link directly to each
   other, so the control loops (IMU → EKF, `cmd_vel` → twist_mux → ros2_control, safety) never
   wait on the router. They also link to the router, for everything crossing containers.
-- **`rover-a1-orchestrator`, `rover-a1-sensors`: `client`.** One TCP link each, to the router,
+- **`rover-a1-orchestrator`, `rover-a1-sensors`, `rover-a1-vda5050`: `client`.** One TCP link each, to the router,
   which carries all their traffic. These are the containers whose processes come and go (Nav 2
   restarts, indoor mapping ↔ localization switches). When a group of clients stops, only the
   router cleans up after it, not every process on the rover.
@@ -701,7 +836,7 @@ these ports on `192.168.1.201`:
 | Port | Service |
 |---|---|
 | 22–26 | SSH into the containers |
-| 80, 5000 | Drive UI (`ROVER_DRIVE_PORT`; the fleet variable sets 80) |
+| 80, 5000 | Drive UI (`ROVER_UI_PORT`; the fleet variable sets 80) |
 | 5080 | Uplink page |
 | 8765 | foxglove_bridge |
 | 1883, 9001 | MQTT, MQTT over WebSockets |

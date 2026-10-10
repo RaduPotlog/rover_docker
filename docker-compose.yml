@@ -14,67 +14,96 @@
 
 version: '2.4'
 
-# Every service declares the same ROVER_* variables, in the same order; each service acts only
-# on some of them (README.md, "Device variables"). A balenaCloud fleet/device variable overrides
-# them. `KEY: 'value'` is a default; `KEY:` stays unset unless balenaCloud sets it.
+# Every ROVER service declares the same ROVER_* variables, in the same order (the sensors and
+# orchestrator add the camera ones they read); each service acts only on some of them
+# (README.md, "Device variables"). A balenaCloud fleet/device variable overrides them.
+# `KEY: 'value'` is a default; `KEY:` stays unset unless balenaCloud sets it.
 #
-# ROVER_NAMESPACE              ROS namespace and TF prefix; keep it equal on every service
-# ROVER_ZENOH_MODE             platform, orchestrator, sensors: how their ROS processes join Zenoh.
-#                              peer = direct links between processes (platform default, so its
-#                              control loops never wait on the router); client = one link to
-#                              rover-a1-zenoh-router (orchestrator and sensors default). See
-#                              README.md "ROS 2 over the rover LAN" before changing either
-# ROVER_FOXGLOVE_TOPIC_WHITELIST platform: foxglove_bridge topic_whitelist; unset = only the topics
-#                              the web UIs use (rover_web_bridges.launch.py), "['.*']" = everything
-# ROVER_FOXGLOVE_SERVICE_WHITELIST platform: foxglove_bridge service_whitelist; unset = only the
-#                              services the web UIs call, "['.*']" = everything
-# ROVER_START_ROS_PLATFORM     platform: run rover_bringup (the only switch on by default)
-# ROVER_START_NAVIGATION       orchestrator: run Nav 2 (also needs ROVER_START_ROS_PLATFORM)
-# ROVER_START_MISSION_MANAGER  orchestrator: run the mission manager on top of Nav 2 (needed for
-#                              the AUTOMATIC driving mode / GoTo)
-# ROVER_START_DRIVE_MODE       orchestrator: run rover_drive_mode (default true, independent of Nav 2):
-#                              routes the drive UI's joystick; off = the drive UI cannot drive
-# ROVER_DRIVE_DEFAULT_MODE     orchestrator: driving mode at boot, assisted (lidar slow/stop) | manual
-# ROVER_START_SENSORS          sensors: run the sensor payload drivers at all
-# ROVER_USE_GPS                sensors: GNSS driver; platform: GPS fusion;
-#                              orchestrator: Nav 2 localization_source gps vs odom
-# ROVER_GPS_PUBLISH_MAP_TF     platform: global EKF publishes map -> odom (default false: SLAM/AMCL
-#                              own it); orchestrator: localization_source checks
-# ROVER_USE_LIDAR              sensors: RS16 driver; orchestrator: warns when off
-# ROVER_USE_CAMERA             sensors: RealSense driver (rover_realsense) + camera perception
-#                              nodes (default false); orchestrator: only warns when
-#                              ROVER_NAV_USE_CAMERA or ROVER_START_FOLLOW_ME needs it
-# ROVER_LOCALIZATION_SOURCE    orchestrator: odom | gps | slam | amcl | indoor, overrides ROVER_USE_GPS;
-#                              indoor = drive-UI mapping + maps in /maps (rover_indoor_nav_manager);
-#                              sensors: indoor/slam/amcl make poor GNSS accuracy a WARN, not an ERROR
-# ROVER_NAV_MAP                orchestrator: map yaml, default rover_navigation's empty_world;
-#                              REQUIRED for localization_source=amcl (the default empty map
-#                              cannot localize) - build one with =slam first, see below
-# ROVER_NAV_USE_CAMERA         orchestrator: add the camera depth cloud to the Nav 2 local costmap
-#                              (default false; needs ROVER_USE_CAMERA, and a measured camera mount)
-# ROVER_AMCL_INITIAL_POSE_*    orchestrator: X/Y/YAW AMCL is seeded with at startup, in the map
-#                              frame; unset = 0,0,0, correct only if the map origin is the dock
-# ROVER_{GPS,IMU,LIDAR}_*      platform (rover_description): sensor mount pose relative to
-#                              body_link; unset = URDF default
-# ROVER_DRIVE_*                drive-interface: on/off, http port, login, teleop speed limits (m/s, rad/s),
-#                              rim-speed limit + track width (keep equal to rover_crsf_teleop.yaml),
-#                              stick expo per axis (0 linear .. 1 softest);
-#                              no password = nginx is not started (the container idles, sshd on 25 only)
-# ROVER_START_VDA5050          vda5050: run the VDA 5050 fleet interface (default false; orders need
-#                              ROVER_START_MISSION_MANAGER=true on the orchestrator)
-# ROVER_VDA5050_*              vda5050: local Mosquitto on/off, broker host/port/user/password, TLS
-#                              (auto = on when a user is set, false = plaintext e.g. over WireGuard),
-#                              manufacturer + serial number (MQTT topic levels),
-#                              Nav 2 frame of the order coordinates (unset = odom or map, following
-#                              the orchestrator's localization source)
-# ROVER_START_FOLLOW_ME        follow-me (default false). sensors: fmoc person tracking
-#                              (rover_perception, needs ROVER_USE_CAMERA); orchestrator: the
-#                              follow_me node (rover_follow_me). A person standing 1.5 m in front
-#                              of the stopped rover is picked up; `ros2 service call
-#                              /<ns>/follow_me/start std_srvs/srv/Trigger` (or the drive UI, or the
-#                              VDA 5050 instant action startFollowing) starts following through
-#                              Nav 2's Following server. Needs ROVER_START_NAVIGATION,
-#                              ROVER_START_MISSION_MANAGER and AUTOMATIC drive mode
+# Names are ROVER_<SCOPE>_<THING>: SCOPE is the container that runs it (PLATFORM, ORCH,
+# SENSORS, UI, VDA5050, NETWORK) or SYSTEM, read by several containers - set a ROVER_SYSTEM_*
+# variable for all services so they agree. Renamed 2026-10-10: tools/env_renames.yaml maps the
+# old names, `tools/balena_env.py migrate` renames them on balenaCloud.
+#
+# --- SYSTEM ---
+# ROVER_SYSTEM_NAMESPACE        ROS namespace and TF prefix
+# ROVER_SYSTEM_USE_GPS          sensors: GNSS driver; platform: GPS fusion;
+#                               orchestrator: Nav 2 localization_source gps vs odom
+# ROVER_SYSTEM_USE_LIDAR        sensors: RS16 driver; orchestrator: warns when off
+# ROVER_SYSTEM_USE_CAMERA       sensors: RealSense driver (rover_realsense) + camera perception
+#                               nodes (default false); orchestrator: only warns when
+#                               ROVER_ORCH_NAV_USE_CAMERA or ROVER_SYSTEM_FOLLOW_ME_ENABLE needs it
+# ROVER_SYSTEM_FOLLOW_ME_ENABLE follow-me (default false). sensors: fmoc person tracking
+#                               (rover_perception, needs ROVER_SYSTEM_USE_CAMERA); orchestrator: the
+#                               follow_me node (rover_follow_me). A person standing 1.5 m in front
+#                               of the stopped rover is picked up; `ros2 service call
+#                               /<ns>/follow_me/start std_srvs/srv/Trigger` (or the drive UI, or the
+#                               VDA 5050 instant action startFollowing) starts following through
+#                               Nav 2's Following server. Needs ROVER_ORCH_NAVIGATION,
+#                               ROVER_ORCH_MISSION_MANAGER and AUTOMATIC drive mode
+# ROVER_SYSTEM_MOUNT_<IMU|GPS|LIDAR|CAMERA>_<X|Y|Z|ROLL|PITCH|YAW>
+#                               sensor mount pose relative to body_link (m, rad), read by
+#                               rover_description in the platform; unset = URDF default
+#
+# --- Zenoh session mode, one per container ---
+# ROVER_ZENOH_MODE_<PLATFORM|ORCH|SENSORS|VDA5050>
+#                               how that container's ROS processes join Zenoh.
+#                               peer = direct links between processes (platform default, so its
+#                               control loops never wait on the router); client = one link to
+#                               rover-a1-zenoh-router (the others' default). See README.md
+#                               "ROS 2 over the rover LAN" before changing one
+#
+# --- rover-a1-platform ---
+# ROVER_PLATFORM_ENABLE         run rover_bringup (the only stack switch on by default); the
+#                               orchestrator reads it too, so set it for all services
+# ROVER_PLATFORM_GPS_MAP_TF     global EKF publishes map -> odom (default false: SLAM/AMCL own it);
+#                               orchestrator: localization_source checks
+# ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST
+#                               foxglove_bridge topic_whitelist; unset = only the topics the web
+#                               UIs use (rover_web_bridges.launch.py), "['.*']" = everything
+# ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST
+#                               foxglove_bridge service_whitelist; unset = only the services the
+#                               web UIs call, "['.*']" = everything
+#
+# --- rover-a1-orchestrator ---
+# ROVER_ORCH_NAVIGATION         run Nav 2 (also needs ROVER_PLATFORM_ENABLE)
+# ROVER_ORCH_MISSION_MANAGER    run the mission manager on top of Nav 2 (needed for the AUTOMATIC
+#                               driving mode / GoTo)
+# ROVER_ORCH_DRIVE_MODE         run rover_drive_mode (default true, independent of Nav 2): routes
+#                               the drive UI's joystick; off = the drive UI cannot drive
+# ROVER_ORCH_DRIVE_DEFAULT_MODE driving mode at boot, assisted (lidar slow/stop) | manual
+# ROVER_ORCH_LOCALIZATION_SOURCE
+#                               odom | gps | slam | amcl | indoor, overrides ROVER_SYSTEM_USE_GPS;
+#                               indoor = drive-UI mapping + maps in /maps (rover_indoor_nav_manager);
+#                               sensors: indoor/slam/amcl make poor GNSS accuracy a WARN, not an ERROR
+# ROVER_ORCH_NAV_MAP            map yaml, default rover_navigation's empty_world; REQUIRED for
+#                               localization_source=amcl (the default empty map cannot localize) -
+#                               build one with =slam first
+# ROVER_ORCH_NAV_USE_CAMERA     add the camera depth cloud to the Nav 2 local costmap (default
+#                               false; needs ROVER_SYSTEM_USE_CAMERA, and a measured camera mount)
+# ROVER_ORCH_AMCL_INITIAL_POSE_<X|Y|YAW>
+#                               pose AMCL is seeded with at startup, in the map frame; unset =
+#                               0,0,0, correct only if the map origin is the dock
+#
+# --- rover-a1-sensors ---
+# ROVER_SENSORS_ENABLE          run the sensor payload drivers at all
+# ROVER_SENSORS_CAMERA_*        RealSense stream rate/resolution, depth cloud, AprilTags, YOLO
+#                               detection (with ROVER_SYSTEM_USE_CAMERA)
+# ROVER_SENSORS_TERRAIN         ground slope from the lidar cloud (needs ROVER_SYSTEM_USE_LIDAR)
+#
+# --- rover-a1-drive-interface ---
+# ROVER_UI_*                    on/off, http port, login, teleop speed limits (m/s, rad/s),
+#                               rim-speed limit + track width (keep equal to rover_crsf_teleop.yaml),
+#                               stick expo per axis (0 linear .. 1 softest);
+#                               no password = nginx is not started (the container idles, sshd on 25 only)
+#
+# --- rover-a1-vda5050 ---
+# ROVER_VDA5050_ENABLE          run the VDA 5050 fleet interface (default false; orders need
+#                               ROVER_ORCH_MISSION_MANAGER=true on the orchestrator)
+# ROVER_VDA5050_*               local Mosquitto on/off, broker host/port/user/password, TLS
+#                               (auto = on when a user is set, false = plaintext e.g. over WireGuard),
+#                               manufacturer + serial number (MQTT topic levels),
+#                               Nav 2 frame of the order coordinates (unset = odom or map, following
+#                               the orchestrator's localization source)
 #
 # All services use host networking: they share the Zenoh router on 127.0.0.1:7447 (its own
 # service, rover-a1-zenoh-router, so it keeps running while the others restart), and the sensors
@@ -83,9 +112,9 @@ version: '2.4'
 services:
   # The Zenoh router (rmw_zenohd) all ROS processes connect to. Its own service, so platform
   # restarts and releases don't take the ROS graph down with it: the image only changes with
-  # the ROS release. Binds 127.0.0.1:7447 plus ROVER_LAN_IP (default 192.168.1.201) for PCs on
-  # the rover LAN (setup_rover_pc.sh). It reads only ROVER_LAN_IP (a balenaCloud variable); the
-  # ROVER_* list below is there to keep every service's list the same.
+  # the ROS release. Binds 127.0.0.1:7447 plus ROVER_SYSTEM_LAN_IP (default 192.168.1.201) for
+  # PCs on the rover LAN (setup_rover_pc.sh). It reads only ROVER_SYSTEM_LAN_IP (a balenaCloud
+  # variable); the ROVER_* list below is there to keep every service's list the same.
   rover-a1-zenoh-router:
     build:
       context: ./rover_a1_zenoh_router
@@ -96,60 +125,64 @@ services:
     stop_grace_period: 2s
     network_mode: host
     environment:
-      ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'client'
-      ROVER_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'false'
-      ROVER_START_DRIVE_MODE: 'true'
-      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_START_SENSORS: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_GPS_PUBLISH_MAP_TF: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_LOCALIZATION_SOURCE:
-      ROVER_NAV_MAP:
-      ROVER_NAV_USE_CAMERA: 'false'
-      ROVER_AMCL_INITIAL_POSE_X:
-      ROVER_AMCL_INITIAL_POSE_Y:
-      ROVER_AMCL_INITIAL_POSE_YAW:
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_CAMERA_LOCALIZATION_X:
-      ROVER_CAMERA_LOCALIZATION_Y:
-      ROVER_CAMERA_LOCALIZATION_Z:
-      ROVER_CAMERA_ORIENTATION_R:
-      ROVER_CAMERA_ORIENTATION_P:
-      ROVER_CAMERA_ORIENTATION_Y:
-      ROVER_DRIVE_ENABLE: 'true'
-      ROVER_DRIVE_PORT: '5000'
-      ROVER_DRIVE_USER: 'rover'
-      ROVER_DRIVE_PASSWORD:
-      ROVER_DRIVE_MAX_LINEAR: '1.0'
-      ROVER_DRIVE_MAX_ANGULAR: '1.0'
-      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
-      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
-      ROVER_DRIVE_EXPO_LINEAR: '0.3'
-      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
-      ROVER_START_VDA5050: 'false'
+      ROVER_SYSTEM_NAMESPACE: 'rover'
+      ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_SYSTEM_MOUNT_IMU_X:
+      ROVER_SYSTEM_MOUNT_IMU_Y:
+      ROVER_SYSTEM_MOUNT_IMU_Z:
+      ROVER_SYSTEM_MOUNT_IMU_ROLL:
+      ROVER_SYSTEM_MOUNT_IMU_PITCH:
+      ROVER_SYSTEM_MOUNT_IMU_YAW:
+      ROVER_SYSTEM_MOUNT_GPS_X:
+      ROVER_SYSTEM_MOUNT_GPS_Y:
+      ROVER_SYSTEM_MOUNT_GPS_Z:
+      ROVER_SYSTEM_MOUNT_GPS_ROLL:
+      ROVER_SYSTEM_MOUNT_GPS_PITCH:
+      ROVER_SYSTEM_MOUNT_GPS_YAW:
+      ROVER_SYSTEM_MOUNT_LIDAR_X:
+      ROVER_SYSTEM_MOUNT_LIDAR_Y:
+      ROVER_SYSTEM_MOUNT_LIDAR_Z:
+      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
+      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
+      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
+      ROVER_SYSTEM_MOUNT_CAMERA_X:
+      ROVER_SYSTEM_MOUNT_CAMERA_Y:
+      ROVER_SYSTEM_MOUNT_CAMERA_Z:
+      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
+      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
+      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
+      ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ZENOH_MODE_VDA5050: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_GPS_MAP_TF: 'false'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ORCH_NAVIGATION: 'false'
+      ROVER_ORCH_MISSION_MANAGER: 'false'
+      ROVER_ORCH_DRIVE_MODE: 'true'
+      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
+      ROVER_ORCH_NAV_MAP:
+      ROVER_ORCH_NAV_USE_CAMERA: 'false'
+      ROVER_ORCH_AMCL_INITIAL_POSE_X:
+      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
+      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
+      ROVER_SENSORS_ENABLE: 'false'
+      ROVER_UI_ENABLE: 'true'
+      ROVER_UI_PORT: '5000'
+      ROVER_UI_USER: 'rover'
+      ROVER_UI_PASSWORD:
+      ROVER_UI_MAX_LINEAR: '1.0'
+      ROVER_UI_MAX_ANGULAR: '1.0'
+      ROVER_UI_MAX_RIM_SPEED: '1.7'
+      ROVER_UI_TRACK_WIDTH: '1.0204'
+      ROVER_UI_EXPO_LINEAR: '0.3'
+      ROVER_UI_EXPO_ANGULAR: '0.5'
+      ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
       ROVER_VDA5050_BROKER_PORT: '1883'
@@ -159,7 +192,6 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
-      ROVER_START_FOLLOW_ME: 'false'
     healthcheck:
       # Script in the image (TCP connect to 127.0.0.1:7447); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
@@ -193,60 +225,64 @@ services:
     volumes:
       - rover-config:/config
     environment:
-      ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'peer'
-      ROVER_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'false'
-      ROVER_START_DRIVE_MODE: 'true'
-      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_START_SENSORS: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_GPS_PUBLISH_MAP_TF: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_LOCALIZATION_SOURCE:
-      ROVER_NAV_MAP:
-      ROVER_NAV_USE_CAMERA: 'false'
-      ROVER_AMCL_INITIAL_POSE_X:
-      ROVER_AMCL_INITIAL_POSE_Y:
-      ROVER_AMCL_INITIAL_POSE_YAW:
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_CAMERA_LOCALIZATION_X:
-      ROVER_CAMERA_LOCALIZATION_Y:
-      ROVER_CAMERA_LOCALIZATION_Z:
-      ROVER_CAMERA_ORIENTATION_R:
-      ROVER_CAMERA_ORIENTATION_P:
-      ROVER_CAMERA_ORIENTATION_Y:
-      ROVER_DRIVE_ENABLE: 'true'
-      ROVER_DRIVE_PORT: '5000'
-      ROVER_DRIVE_USER: 'rover'
-      ROVER_DRIVE_PASSWORD:
-      ROVER_DRIVE_MAX_LINEAR: '1.0'
-      ROVER_DRIVE_MAX_ANGULAR: '1.0'
-      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
-      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
-      ROVER_DRIVE_EXPO_LINEAR: '0.3'
-      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
-      ROVER_START_VDA5050: 'false'
+      ROVER_SYSTEM_NAMESPACE: 'rover'
+      ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_SYSTEM_MOUNT_IMU_X:
+      ROVER_SYSTEM_MOUNT_IMU_Y:
+      ROVER_SYSTEM_MOUNT_IMU_Z:
+      ROVER_SYSTEM_MOUNT_IMU_ROLL:
+      ROVER_SYSTEM_MOUNT_IMU_PITCH:
+      ROVER_SYSTEM_MOUNT_IMU_YAW:
+      ROVER_SYSTEM_MOUNT_GPS_X:
+      ROVER_SYSTEM_MOUNT_GPS_Y:
+      ROVER_SYSTEM_MOUNT_GPS_Z:
+      ROVER_SYSTEM_MOUNT_GPS_ROLL:
+      ROVER_SYSTEM_MOUNT_GPS_PITCH:
+      ROVER_SYSTEM_MOUNT_GPS_YAW:
+      ROVER_SYSTEM_MOUNT_LIDAR_X:
+      ROVER_SYSTEM_MOUNT_LIDAR_Y:
+      ROVER_SYSTEM_MOUNT_LIDAR_Z:
+      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
+      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
+      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
+      ROVER_SYSTEM_MOUNT_CAMERA_X:
+      ROVER_SYSTEM_MOUNT_CAMERA_Y:
+      ROVER_SYSTEM_MOUNT_CAMERA_Z:
+      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
+      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
+      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
+      ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ZENOH_MODE_VDA5050: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_GPS_MAP_TF: 'false'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ORCH_NAVIGATION: 'false'
+      ROVER_ORCH_MISSION_MANAGER: 'false'
+      ROVER_ORCH_DRIVE_MODE: 'true'
+      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
+      ROVER_ORCH_NAV_MAP:
+      ROVER_ORCH_NAV_USE_CAMERA: 'false'
+      ROVER_ORCH_AMCL_INITIAL_POSE_X:
+      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
+      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
+      ROVER_SENSORS_ENABLE: 'false'
+      ROVER_UI_ENABLE: 'true'
+      ROVER_UI_PORT: '5000'
+      ROVER_UI_USER: 'rover'
+      ROVER_UI_PASSWORD:
+      ROVER_UI_MAX_LINEAR: '1.0'
+      ROVER_UI_MAX_ANGULAR: '1.0'
+      ROVER_UI_MAX_RIM_SPEED: '1.7'
+      ROVER_UI_TRACK_WIDTH: '1.0204'
+      ROVER_UI_EXPO_LINEAR: '0.3'
+      ROVER_UI_EXPO_ANGULAR: '0.5'
+      ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
       ROVER_VDA5050_BROKER_PORT: '1883'
@@ -256,7 +292,6 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
-      ROVER_START_FOLLOW_ME: 'false'
   rover-a1-orchestrator:
     build:
       context: ./rover_a1_orchestrator
@@ -268,68 +303,72 @@ services:
     # sensors 23, orchestrator 24, drive-interface 25, vda5050 26).
     network_mode: host
     # map_autosaver writes /maps/map.{yaml,pgm} while localization_source=slam, and
-    # localization_source=amcl reads it back through ROVER_NAV_MAP. A named volume, not a bind
+    # localization_source=amcl reads it back through ROVER_ORCH_NAV_MAP. A named volume, not a bind
     # mount: a balenaOS device filesystem is read-only outside /data. The map survives container
     # restarts and image updates, but not a device reprovision - copy it off with
     # `scp -P 24 root@<device>:/maps/map.* .`
     volumes:
       - rover-maps:/maps
     environment:
-      ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'client'
-      ROVER_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'false'
-      ROVER_START_DRIVE_MODE: 'true'
-      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_START_SENSORS: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_GPS_PUBLISH_MAP_TF: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_USE_CAMERA: 'false'
-      ROVER_LOCALIZATION_SOURCE:
-      ROVER_NAV_MAP:
-      ROVER_NAV_USE_CAMERA: 'false'
-      ROVER_AMCL_INITIAL_POSE_X:
-      ROVER_AMCL_INITIAL_POSE_Y:
-      ROVER_AMCL_INITIAL_POSE_YAW:
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_CAMERA_LOCALIZATION_X:
-      ROVER_CAMERA_LOCALIZATION_Y:
-      ROVER_CAMERA_LOCALIZATION_Z:
-      ROVER_CAMERA_ORIENTATION_R:
-      ROVER_CAMERA_ORIENTATION_P:
-      ROVER_CAMERA_ORIENTATION_Y:
-      ROVER_DRIVE_ENABLE: 'true'
-      ROVER_DRIVE_PORT: '5000'
-      ROVER_DRIVE_USER: 'rover'
-      ROVER_DRIVE_PASSWORD:
-      ROVER_DRIVE_MAX_LINEAR: '1.0'
-      ROVER_DRIVE_MAX_ANGULAR: '1.0'
-      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
-      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
-      ROVER_DRIVE_EXPO_LINEAR: '0.3'
-      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
-      ROVER_START_VDA5050: 'false'
+      ROVER_SYSTEM_NAMESPACE: 'rover'
+      ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
+      ROVER_SYSTEM_USE_CAMERA: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_SYSTEM_MOUNT_IMU_X:
+      ROVER_SYSTEM_MOUNT_IMU_Y:
+      ROVER_SYSTEM_MOUNT_IMU_Z:
+      ROVER_SYSTEM_MOUNT_IMU_ROLL:
+      ROVER_SYSTEM_MOUNT_IMU_PITCH:
+      ROVER_SYSTEM_MOUNT_IMU_YAW:
+      ROVER_SYSTEM_MOUNT_GPS_X:
+      ROVER_SYSTEM_MOUNT_GPS_Y:
+      ROVER_SYSTEM_MOUNT_GPS_Z:
+      ROVER_SYSTEM_MOUNT_GPS_ROLL:
+      ROVER_SYSTEM_MOUNT_GPS_PITCH:
+      ROVER_SYSTEM_MOUNT_GPS_YAW:
+      ROVER_SYSTEM_MOUNT_LIDAR_X:
+      ROVER_SYSTEM_MOUNT_LIDAR_Y:
+      ROVER_SYSTEM_MOUNT_LIDAR_Z:
+      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
+      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
+      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
+      ROVER_SYSTEM_MOUNT_CAMERA_X:
+      ROVER_SYSTEM_MOUNT_CAMERA_Y:
+      ROVER_SYSTEM_MOUNT_CAMERA_Z:
+      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
+      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
+      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
+      ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ZENOH_MODE_VDA5050: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_GPS_MAP_TF: 'false'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ORCH_NAVIGATION: 'false'
+      ROVER_ORCH_MISSION_MANAGER: 'false'
+      ROVER_ORCH_DRIVE_MODE: 'true'
+      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
+      ROVER_ORCH_NAV_MAP:
+      ROVER_ORCH_NAV_USE_CAMERA: 'false'
+      ROVER_ORCH_AMCL_INITIAL_POSE_X:
+      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
+      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
+      ROVER_SENSORS_ENABLE: 'false'
+      ROVER_UI_ENABLE: 'true'
+      ROVER_UI_PORT: '5000'
+      ROVER_UI_USER: 'rover'
+      ROVER_UI_PASSWORD:
+      ROVER_UI_MAX_LINEAR: '1.0'
+      ROVER_UI_MAX_ANGULAR: '1.0'
+      ROVER_UI_MAX_RIM_SPEED: '1.7'
+      ROVER_UI_TRACK_WIDTH: '1.0204'
+      ROVER_UI_EXPO_LINEAR: '0.3'
+      ROVER_UI_EXPO_ANGULAR: '0.5'
+      ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
       ROVER_VDA5050_BROKER_PORT: '1883'
@@ -339,7 +378,6 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
-      ROVER_START_FOLLOW_ME: 'false'
   rover-a1-sensors:
     build:
       context: ./rover_a1_sensors
@@ -351,74 +389,78 @@ services:
     network_mode: host
     # The RealSense D435i enumerates under /dev/bus/usb and /dev/video*, and re-enumerates on
     # every re-plug, so a fixed `devices:` list would not follow it. Same approach as the
-    # platform service. Only needed with ROVER_USE_CAMERA=true.
+    # platform service. Only needed with ROVER_SYSTEM_USE_CAMERA=true.
     privileged: true
     environment:
-      ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'client'
-      ROVER_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'false'
-      ROVER_START_DRIVE_MODE: 'true'
-      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_START_SENSORS: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_GPS_PUBLISH_MAP_TF: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_USE_CAMERA: 'false'
-      ROVER_CAMERA_DEPTH_CLOUD: 'true'
-      ROVER_CAMERA_FIDUCIALS: 'false'
-      ROVER_CAMERA_DETECTION: 'false'
-      ROVER_CAMERA_DETECTION_MODEL:
-      ROVER_CAMERA_DETECTION_GPU: 'false'
-      ROVER_USE_TERRAIN: 'false'
-      ROVER_CAMERA_FPS: '15'
-      ROVER_CAMERA_DEPTH_PROFILE: '424x240'
-      ROVER_CAMERA_FIDUCIALS_DECIMATE: '2.0'
-      ROVER_CAMERA_DETECTION_MAX_RATE: '10.0'
-      ROVER_LOCALIZATION_SOURCE:
-      ROVER_NAV_MAP:
-      ROVER_NAV_USE_CAMERA: 'false'
-      ROVER_AMCL_INITIAL_POSE_X:
-      ROVER_AMCL_INITIAL_POSE_Y:
-      ROVER_AMCL_INITIAL_POSE_YAW:
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_CAMERA_LOCALIZATION_X:
-      ROVER_CAMERA_LOCALIZATION_Y:
-      ROVER_CAMERA_LOCALIZATION_Z:
-      ROVER_CAMERA_ORIENTATION_R:
-      ROVER_CAMERA_ORIENTATION_P:
-      ROVER_CAMERA_ORIENTATION_Y:
-      ROVER_DRIVE_ENABLE: 'true'
-      ROVER_DRIVE_PORT: '5000'
-      ROVER_DRIVE_USER: 'rover'
-      ROVER_DRIVE_PASSWORD:
-      ROVER_DRIVE_MAX_LINEAR: '1.0'
-      ROVER_DRIVE_MAX_ANGULAR: '1.0'
-      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
-      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
-      ROVER_DRIVE_EXPO_LINEAR: '0.3'
-      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
-      ROVER_START_VDA5050: 'false'
+      ROVER_SYSTEM_NAMESPACE: 'rover'
+      ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
+      ROVER_SYSTEM_USE_CAMERA: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_SYSTEM_MOUNT_IMU_X:
+      ROVER_SYSTEM_MOUNT_IMU_Y:
+      ROVER_SYSTEM_MOUNT_IMU_Z:
+      ROVER_SYSTEM_MOUNT_IMU_ROLL:
+      ROVER_SYSTEM_MOUNT_IMU_PITCH:
+      ROVER_SYSTEM_MOUNT_IMU_YAW:
+      ROVER_SYSTEM_MOUNT_GPS_X:
+      ROVER_SYSTEM_MOUNT_GPS_Y:
+      ROVER_SYSTEM_MOUNT_GPS_Z:
+      ROVER_SYSTEM_MOUNT_GPS_ROLL:
+      ROVER_SYSTEM_MOUNT_GPS_PITCH:
+      ROVER_SYSTEM_MOUNT_GPS_YAW:
+      ROVER_SYSTEM_MOUNT_LIDAR_X:
+      ROVER_SYSTEM_MOUNT_LIDAR_Y:
+      ROVER_SYSTEM_MOUNT_LIDAR_Z:
+      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
+      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
+      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
+      ROVER_SYSTEM_MOUNT_CAMERA_X:
+      ROVER_SYSTEM_MOUNT_CAMERA_Y:
+      ROVER_SYSTEM_MOUNT_CAMERA_Z:
+      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
+      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
+      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
+      ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ZENOH_MODE_VDA5050: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_GPS_MAP_TF: 'false'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ORCH_NAVIGATION: 'false'
+      ROVER_ORCH_MISSION_MANAGER: 'false'
+      ROVER_ORCH_DRIVE_MODE: 'true'
+      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
+      ROVER_ORCH_NAV_MAP:
+      ROVER_ORCH_NAV_USE_CAMERA: 'false'
+      ROVER_ORCH_AMCL_INITIAL_POSE_X:
+      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
+      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
+      ROVER_SENSORS_ENABLE: 'false'
+      ROVER_SENSORS_CAMERA_FPS: '15'
+      ROVER_SENSORS_CAMERA_DEPTH_PROFILE: '424x240'
+      ROVER_SENSORS_CAMERA_DEPTH_CLOUD: 'true'
+      ROVER_SENSORS_CAMERA_FIDUCIALS: 'false'
+      ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE: '2.0'
+      ROVER_SENSORS_CAMERA_DETECTION: 'false'
+      ROVER_SENSORS_CAMERA_DETECTION_MODEL:
+      ROVER_SENSORS_CAMERA_DETECTION_GPU: 'false'
+      ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE: '10.0'
+      ROVER_SENSORS_TERRAIN: 'false'
+      ROVER_UI_ENABLE: 'true'
+      ROVER_UI_PORT: '5000'
+      ROVER_UI_USER: 'rover'
+      ROVER_UI_PASSWORD:
+      ROVER_UI_MAX_LINEAR: '1.0'
+      ROVER_UI_MAX_ANGULAR: '1.0'
+      ROVER_UI_MAX_RIM_SPEED: '1.7'
+      ROVER_UI_TRACK_WIDTH: '1.0204'
+      ROVER_UI_EXPO_LINEAR: '0.3'
+      ROVER_UI_EXPO_ANGULAR: '0.5'
+      ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
       ROVER_VDA5050_BROKER_PORT: '1883'
@@ -428,67 +470,70 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
-      ROVER_START_FOLLOW_ME: 'false'
   rover-a1-drive-interface:
     build:
       context: ./rover_a1_drive_interface
     restart: always
     network_mode: host
     environment:
-      ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'client'
-      ROVER_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'false'
-      ROVER_START_DRIVE_MODE: 'true'
-      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_START_SENSORS: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_GPS_PUBLISH_MAP_TF: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_LOCALIZATION_SOURCE:
-      ROVER_NAV_MAP:
-      ROVER_NAV_USE_CAMERA: 'false'
-      ROVER_AMCL_INITIAL_POSE_X:
-      ROVER_AMCL_INITIAL_POSE_Y:
-      ROVER_AMCL_INITIAL_POSE_YAW:
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_CAMERA_LOCALIZATION_X:
-      ROVER_CAMERA_LOCALIZATION_Y:
-      ROVER_CAMERA_LOCALIZATION_Z:
-      ROVER_CAMERA_ORIENTATION_R:
-      ROVER_CAMERA_ORIENTATION_P:
-      ROVER_CAMERA_ORIENTATION_Y:
-      ROVER_DRIVE_ENABLE: 'true'
-      ROVER_DRIVE_PORT: '5000'
-      ROVER_DRIVE_USER: 'rover'
-      ROVER_DRIVE_PASSWORD:
-      ROVER_DRIVE_MAX_LINEAR: '1.0'
-      ROVER_DRIVE_MAX_ANGULAR: '1.0'
-      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
-      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
-      ROVER_DRIVE_EXPO_LINEAR: '0.3'
-      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
-      ROVER_START_VDA5050: 'false'
+      ROVER_SYSTEM_NAMESPACE: 'rover'
+      ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_SYSTEM_MOUNT_IMU_X:
+      ROVER_SYSTEM_MOUNT_IMU_Y:
+      ROVER_SYSTEM_MOUNT_IMU_Z:
+      ROVER_SYSTEM_MOUNT_IMU_ROLL:
+      ROVER_SYSTEM_MOUNT_IMU_PITCH:
+      ROVER_SYSTEM_MOUNT_IMU_YAW:
+      ROVER_SYSTEM_MOUNT_GPS_X:
+      ROVER_SYSTEM_MOUNT_GPS_Y:
+      ROVER_SYSTEM_MOUNT_GPS_Z:
+      ROVER_SYSTEM_MOUNT_GPS_ROLL:
+      ROVER_SYSTEM_MOUNT_GPS_PITCH:
+      ROVER_SYSTEM_MOUNT_GPS_YAW:
+      ROVER_SYSTEM_MOUNT_LIDAR_X:
+      ROVER_SYSTEM_MOUNT_LIDAR_Y:
+      ROVER_SYSTEM_MOUNT_LIDAR_Z:
+      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
+      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
+      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
+      ROVER_SYSTEM_MOUNT_CAMERA_X:
+      ROVER_SYSTEM_MOUNT_CAMERA_Y:
+      ROVER_SYSTEM_MOUNT_CAMERA_Z:
+      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
+      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
+      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
+      ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ZENOH_MODE_VDA5050: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_GPS_MAP_TF: 'false'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ORCH_NAVIGATION: 'false'
+      ROVER_ORCH_MISSION_MANAGER: 'false'
+      ROVER_ORCH_DRIVE_MODE: 'true'
+      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
+      ROVER_ORCH_NAV_MAP:
+      ROVER_ORCH_NAV_USE_CAMERA: 'false'
+      ROVER_ORCH_AMCL_INITIAL_POSE_X:
+      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
+      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
+      ROVER_SENSORS_ENABLE: 'false'
+      ROVER_UI_ENABLE: 'true'
+      ROVER_UI_PORT: '5000'
+      ROVER_UI_USER: 'rover'
+      ROVER_UI_PASSWORD:
+      ROVER_UI_MAX_LINEAR: '1.0'
+      ROVER_UI_MAX_ANGULAR: '1.0'
+      ROVER_UI_MAX_RIM_SPEED: '1.7'
+      ROVER_UI_TRACK_WIDTH: '1.0204'
+      ROVER_UI_EXPO_LINEAR: '0.3'
+      ROVER_UI_EXPO_ANGULAR: '0.5'
+      ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
       ROVER_VDA5050_BROKER_PORT: '1883'
@@ -498,9 +543,8 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
-      ROVER_START_FOLLOW_ME: 'false'
     healthcheck:
-      # Script in the image (reads ROVER_DRIVE_PORT); no `$` here (balena's compose parser mangles `$$`).
+      # Script in the image (reads ROVER_UI_PORT); no `$` here (balena's compose parser mangles `$$`).
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
@@ -508,7 +552,7 @@ services:
       retries: 3
 
   # VDA 5050 fleet interface: InOrbit's connector + rover_vda5050_adapter (rover_vda5050), driving
-  # through rover_mission_manager in rover-a1-orchestrator. Idle unless ROVER_START_VDA5050=true.
+  # through rover_mission_manager in rover-a1-orchestrator. Idle unless ROVER_VDA5050_ENABLE=true.
   # Runs its own Mosquitto (1883, WebSockets 9001) with ROVER_VDA5050_LOCAL_BROKER=true; sshd on 26.
   rover-a1-vda5050:
     build:
@@ -519,60 +563,64 @@ services:
     restart: always
     network_mode: host
     environment:
-      ROVER_NAMESPACE: 'rover'
-      ROVER_ZENOH_MODE: 'client'
-      ROVER_FOXGLOVE_TOPIC_WHITELIST:
-      ROVER_FOXGLOVE_SERVICE_WHITELIST:
-      ROVER_START_ROS_PLATFORM: 'true'
-      ROVER_START_NAVIGATION: 'false'
-      ROVER_START_MISSION_MANAGER: 'false'
-      ROVER_START_DRIVE_MODE: 'true'
-      ROVER_DRIVE_DEFAULT_MODE: 'assisted'
-      ROVER_START_SENSORS: 'false'
-      ROVER_USE_GPS: 'false'
-      ROVER_GPS_PUBLISH_MAP_TF: 'false'
-      ROVER_USE_LIDAR: 'false'
-      ROVER_LOCALIZATION_SOURCE:
-      ROVER_NAV_MAP:
-      ROVER_NAV_USE_CAMERA: 'false'
-      ROVER_AMCL_INITIAL_POSE_X:
-      ROVER_AMCL_INITIAL_POSE_Y:
-      ROVER_AMCL_INITIAL_POSE_YAW:
-      ROVER_GPS_LOCALIZATION_X:
-      ROVER_GPS_LOCALIZATION_Y:
-      ROVER_GPS_LOCALIZATION_Z:
-      ROVER_GPS_ORIENTATION_R:
-      ROVER_GPS_ORIENTATION_P:
-      ROVER_GPS_ORIENTATION_Y:
-      ROVER_IMU_LOCALIZATION_X:
-      ROVER_IMU_LOCALIZATION_Y:
-      ROVER_IMU_LOCALIZATION_Z:
-      ROVER_IMU_ORIENTATION_R:
-      ROVER_IMU_ORIENTATION_P:
-      ROVER_IMU_ORIENTATION_Y:
-      ROVER_LIDAR_LOCALIZATION_X:
-      ROVER_LIDAR_LOCALIZATION_Y:
-      ROVER_LIDAR_LOCALIZATION_Z:
-      ROVER_LIDAR_ORIENTATION_R:
-      ROVER_LIDAR_ORIENTATION_P:
-      ROVER_LIDAR_ORIENTATION_Y:
-      ROVER_CAMERA_LOCALIZATION_X:
-      ROVER_CAMERA_LOCALIZATION_Y:
-      ROVER_CAMERA_LOCALIZATION_Z:
-      ROVER_CAMERA_ORIENTATION_R:
-      ROVER_CAMERA_ORIENTATION_P:
-      ROVER_CAMERA_ORIENTATION_Y:
-      ROVER_DRIVE_ENABLE: 'true'
-      ROVER_DRIVE_PORT: '5000'
-      ROVER_DRIVE_USER: 'rover'
-      ROVER_DRIVE_PASSWORD:
-      ROVER_DRIVE_MAX_LINEAR: '1.0'
-      ROVER_DRIVE_MAX_ANGULAR: '1.0'
-      ROVER_DRIVE_MAX_RIM_SPEED: '1.7'
-      ROVER_DRIVE_TRACK_WIDTH: '1.0204'
-      ROVER_DRIVE_EXPO_LINEAR: '0.3'
-      ROVER_DRIVE_EXPO_ANGULAR: '0.5'
-      ROVER_START_VDA5050: 'false'
+      ROVER_SYSTEM_NAMESPACE: 'rover'
+      ROVER_SYSTEM_USE_GPS: 'false'
+      ROVER_SYSTEM_USE_LIDAR: 'false'
+      ROVER_SYSTEM_FOLLOW_ME_ENABLE: 'false'
+      ROVER_SYSTEM_MOUNT_IMU_X:
+      ROVER_SYSTEM_MOUNT_IMU_Y:
+      ROVER_SYSTEM_MOUNT_IMU_Z:
+      ROVER_SYSTEM_MOUNT_IMU_ROLL:
+      ROVER_SYSTEM_MOUNT_IMU_PITCH:
+      ROVER_SYSTEM_MOUNT_IMU_YAW:
+      ROVER_SYSTEM_MOUNT_GPS_X:
+      ROVER_SYSTEM_MOUNT_GPS_Y:
+      ROVER_SYSTEM_MOUNT_GPS_Z:
+      ROVER_SYSTEM_MOUNT_GPS_ROLL:
+      ROVER_SYSTEM_MOUNT_GPS_PITCH:
+      ROVER_SYSTEM_MOUNT_GPS_YAW:
+      ROVER_SYSTEM_MOUNT_LIDAR_X:
+      ROVER_SYSTEM_MOUNT_LIDAR_Y:
+      ROVER_SYSTEM_MOUNT_LIDAR_Z:
+      ROVER_SYSTEM_MOUNT_LIDAR_ROLL:
+      ROVER_SYSTEM_MOUNT_LIDAR_PITCH:
+      ROVER_SYSTEM_MOUNT_LIDAR_YAW:
+      ROVER_SYSTEM_MOUNT_CAMERA_X:
+      ROVER_SYSTEM_MOUNT_CAMERA_Y:
+      ROVER_SYSTEM_MOUNT_CAMERA_Z:
+      ROVER_SYSTEM_MOUNT_CAMERA_ROLL:
+      ROVER_SYSTEM_MOUNT_CAMERA_PITCH:
+      ROVER_SYSTEM_MOUNT_CAMERA_YAW:
+      ROVER_ZENOH_MODE_PLATFORM: 'peer'
+      ROVER_ZENOH_MODE_ORCH: 'client'
+      ROVER_ZENOH_MODE_SENSORS: 'client'
+      ROVER_ZENOH_MODE_VDA5050: 'client'
+      ROVER_PLATFORM_ENABLE: 'true'
+      ROVER_PLATFORM_GPS_MAP_TF: 'false'
+      ROVER_PLATFORM_FOXGLOVE_TOPIC_WHITELIST:
+      ROVER_PLATFORM_FOXGLOVE_SERVICE_WHITELIST:
+      ROVER_ORCH_NAVIGATION: 'false'
+      ROVER_ORCH_MISSION_MANAGER: 'false'
+      ROVER_ORCH_DRIVE_MODE: 'true'
+      ROVER_ORCH_DRIVE_DEFAULT_MODE: 'assisted'
+      ROVER_ORCH_LOCALIZATION_SOURCE:
+      ROVER_ORCH_NAV_MAP:
+      ROVER_ORCH_NAV_USE_CAMERA: 'false'
+      ROVER_ORCH_AMCL_INITIAL_POSE_X:
+      ROVER_ORCH_AMCL_INITIAL_POSE_Y:
+      ROVER_ORCH_AMCL_INITIAL_POSE_YAW:
+      ROVER_SENSORS_ENABLE: 'false'
+      ROVER_UI_ENABLE: 'true'
+      ROVER_UI_PORT: '5000'
+      ROVER_UI_USER: 'rover'
+      ROVER_UI_PASSWORD:
+      ROVER_UI_MAX_LINEAR: '1.0'
+      ROVER_UI_MAX_ANGULAR: '1.0'
+      ROVER_UI_MAX_RIM_SPEED: '1.7'
+      ROVER_UI_TRACK_WIDTH: '1.0204'
+      ROVER_UI_EXPO_LINEAR: '0.3'
+      ROVER_UI_EXPO_ANGULAR: '0.5'
+      ROVER_VDA5050_ENABLE: 'false'
       ROVER_VDA5050_LOCAL_BROKER: 'true'
       ROVER_VDA5050_BROKER_HOST: '127.0.0.1'
       ROVER_VDA5050_BROKER_PORT: '1883'
@@ -582,7 +630,6 @@ services:
       ROVER_VDA5050_MANUFACTURER: 'MechatronicsAcademy'
       ROVER_VDA5050_SERIAL_NUMBER: 'rover_a1'
       ROVER_VDA5050_MAP_FRAME:
-      ROVER_START_FOLLOW_ME: 'false'
     healthcheck:
       # Script in the image (TCP connect to the local broker when there is one); no `$` here,
       # (balena's compose parser mangles `$$`).

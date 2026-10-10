@@ -28,6 +28,7 @@ Run without arguments for the interactive menu. The same actions exist as subcom
     balena_env.py dump                 # balenaCloud -> YAML
     balena_env.py diff                 # YAML vs balenaCloud
     balena_env.py write [--dry-run]    # YAML -> balenaCloud (changed entries only)
+    balena_env.py migrate [--dry-run]  # old names on balenaCloud -> new (env_renames.yaml)
 
 Talks to balenaCloud through the balena CLI, which must be installed and logged in.
 Secrets (names containing PASSWORD, SECRET or TOKEN) are never stored in the YAML; set them
@@ -54,6 +55,7 @@ import yaml
 HERE = Path(__file__).resolve().parent
 DEFAULT_COMPOSE = HERE.parent / 'docker-compose.yml'
 DEFAULT_FILE = HERE / 'balena_env.yaml'
+DEFAULT_RENAMES = HERE / 'env_renames.yaml'
 DEFAULT_FLEET = 'g_potlog_radu/rovera1'
 
 ALL = '*'
@@ -61,28 +63,44 @@ LEVELS = ('device', 'fleet')
 SECRET_RE = re.compile(r'PASSWORD|SECRET|TOKEN')
 UUID_RE = re.compile(r'^[0-9a-f]{7,62}$')
 
-# Read by more than one service; README.md asks for all-services variables so they agree.
-ALL_SERVICES_ONLY = ('ROVER_START_ROS_PLATFORM', 'ROVER_USE_GPS', 'ROVER_GPS_PUBLISH_MAP_TF',
-                     'ROVER_NAMESPACE')
+# Read by more than one service, so README.md asks for all-services variables: every
+# ROVER_SYSTEM_* one, and ROVER_PLATFORM_ENABLE (the orchestrator idles without a platform).
+ALL_SERVICES_ONLY_RE = re.compile(r'^(ROVER_SYSTEM_|ROVER_PLATFORM_ENABLE$)')
 
 # Documented in README.md but not declared in docker-compose.yml: (name, default).
 EXTRA_VARIABLES = (
-    ('ROVER_LAN_IP', '192.168.1.201'),
-    ('ROVER_DRIVE_AUX_OUTPUT_NAMES', None),
-    ('ROVER_DRIVE_AUX_INPUT_NAMES', None),
+    ('ROVER_SYSTEM_LAN_IP', '192.168.1.201'),
+    ('ROVER_SYSTEM_LOG_MAX_MB', '20'),
+    ('ROVER_SYSTEM_LOG_BACKUPS', '3'),
+    ('ROVER_SYSTEM_ROS_LOG_MAX_MB', '300'),
+    ('ROVER_SYSTEM_ROS_LOG_KEEP_DAYS', '7'),
+    ('ROVER_UI_AUX_OUTPUT_NAMES', None),
+    ('ROVER_UI_AUX_INPUT_NAMES', None),
 )
 
-# Display / file grouping, first match wins. Mirrors the README "Device variables" tables.
+# Container scope token of each compose service (ROVER_<SCOPE>_*, ROVER_ZENOH_MODE_<SCOPE>).
+SERVICE_SCOPES = {
+    'rover-a1-platform': 'PLATFORM',
+    'rover-a1-orchestrator': 'ORCH',
+    'rover-a1-sensors': 'SENSORS',
+    'rover-a1-drive-interface': 'UI',
+    'rover-a1-vda5050': 'VDA5050',
+    'rover-a1-network': 'NETWORK',
+}
+
+# Display / file grouping by name scope, first match wins. Mirrors the README "Device
+# variables" tables. Names not in the schema (e.g. old ones still on balenaCloud) go to Other.
 GROUPS = (
     ('Network uplink page (rover-a1-network)',
      re.compile(r'^(ROVER_NETWORK_|NETUI_|RUTX11_|UPLINK_|LAN_ZONE$|CLIENT_NETS$)')),
-    ('Stack toggles', re.compile(r'^(ROVER_START_(?!VDA5050)|ROVER_DRIVE_DEFAULT_MODE$)')),
-    ('VDA 5050', re.compile(r'^ROVER_(START_)?VDA5050')),
-    ('Drive interface', re.compile(r'^ROVER_DRIVE_')),
-    ('Sensor mount poses',
-     re.compile(r'^ROVER_(GPS|IMU|LIDAR|CAMERA)_(LOCALIZATION|ORIENTATION)_')),
-    ('Camera and perception', re.compile(r'^ROVER_(CAMERA_|USE_TERRAIN$)')),
-    ('Robot configuration', re.compile(r'^ROVER_')),
+    ('System (all services)', re.compile(r'^ROVER_SYSTEM_(?!MOUNT_)')),
+    ('Sensor mount poses (all services)', re.compile(r'^ROVER_SYSTEM_MOUNT_')),
+    ('Zenoh session mode', re.compile(r'^ROVER_ZENOH_MODE_')),
+    ('Platform', re.compile(r'^ROVER_PLATFORM_')),
+    ('Orchestrator', re.compile(r'^ROVER_ORCH_')),
+    ('Sensors', re.compile(r'^ROVER_SENSORS_')),
+    ('Drive interface', re.compile(r'^ROVER_UI_')),
+    ('VDA 5050', re.compile(r'^ROVER_VDA5050_')),
     ('Other', re.compile(r'')),
 )
 
@@ -192,15 +210,16 @@ def _environment(spec: dict) -> dict[str, str | None]:
 def entries_from_compose(compose: dict) -> list[Entry]:
     """One entry per variable, plus a service-scoped one per service whose default differs.
 
-    Variables of the services that share the ROVER_* list (those declaring ROVER_NAMESPACE)
-    are all-services, as README.md asks. A variable only one other service declares (the
-    rover-a1-network ones) is scoped to that service, so e.g. the router password stays there.
+    Variables of the services that share the ROVER_* list (those declaring
+    ROVER_SYSTEM_NAMESPACE) are all-services, as README.md asks. A variable only one other
+    service declares (the rover-a1-network ones) is scoped to that service, so e.g. the router
+    password stays there.
     """
     defaults: dict[str, dict[str, str | None]] = {}
     shared: set[str] = set()
     for service, spec in (compose.get('services') or {}).items():
         env = _environment(spec or {})
-        if 'ROVER_NAMESPACE' in env:
+        if 'ROVER_SYSTEM_NAMESPACE' in env:
             shared.add(service)
         for name, default in env.items():
             defaults.setdefault(name, {})[service] = default
@@ -366,7 +385,78 @@ def diff(entries: list[Entry], rows: list[dict]) -> tuple[list[Change], list[dic
 def scope_warnings(entries: list[Entry]) -> list[str]:
     return [f'{e.name} is scoped to {e.service}; README.md asks for an all-services variable'
             for e in entries
-            if e.name in ALL_SERVICES_ONLY and e.service != ALL and e.value is not None]
+            if ALL_SERVICES_ONLY_RE.match(e.name) and e.service != ALL and e.value is not None]
+
+
+# --------------------------------------------------------------------------- renames
+
+def load_renames(path: Path) -> dict[str, list[str]]:
+    """Old name -> new name(s) from env_renames.yaml; a list splits one variable in several."""
+    data = yaml.safe_load(path.read_text()) or {}
+    return {old: [new] if isinstance(new, str) else list(new)
+            for old, new in (data.get('renames') or {}).items()}
+
+
+@dataclasses.dataclass
+class Rename:
+    row: dict            # the old variable on balenaCloud
+    entry: Entry         # the new variable to set (same level; service as below)
+    value: str
+    action: str          # add | same | conflict
+    cloud_value: str | None = None
+
+
+def plan_renames(rows: list[dict], renames: dict[str, list[str]]) -> list[Rename]:
+    """What `migrate` sets, for every balenaCloud row whose name was renamed.
+
+    The new variable keeps the old one's level, service and value. A split (the old Zenoh
+    mode, one per container) goes, for an all-services row, to every new name - except a container
+    that has its own service-scoped old row at that level; for a service-scoped row, to that
+    container's new name only (none for a service without one, e.g. the Zenoh router). A new
+    name already on balenaCloud is left alone: same value = nothing to do, else a conflict.
+    """
+    cloud = {row_key(r): r for r in rows}
+    plan = []
+    for row in sorted(rows, key=row_key):
+        name, level, service = row_key(row)
+        new_names = renames.get(name)
+        if not new_names:
+            continue
+        if len(new_names) > 1:
+            if service == ALL:
+                own = {SERVICE_SCOPES.get(s) for (n, lv, s) in cloud
+                       if n == name and lv == level and s != ALL}
+                new_names = [n for n in new_names if n.rsplit('_', 1)[-1] not in own]
+            else:
+                token = SERVICE_SCOPES.get(service)
+                new_names = [n for n in new_names if token and n.endswith(f'_{token}')]
+        value = _to_str(row.get('value')) or ''
+        for new in new_names:
+            entry = Entry(new, None if is_secret(new) else value, level=level, service=service,
+                          secret=is_secret(new))
+            existing = cloud.get(entry.key)
+            if existing is None:
+                plan.append(Rename(row, entry, value, 'add'))
+            else:
+                cloud_value = _to_str(existing.get('value')) or ''
+                plan.append(Rename(row, entry, value,
+                                   'same' if cloud_value == value else 'conflict', cloud_value))
+    return plan
+
+
+def rename_entries(entries: list[Entry], renames: dict[str, list[str]]) -> list[Entry]:
+    """YAML entries under their new names (a split copies the value to every new name).
+
+    When an old and a new entry land on the same (name, level, service), the one with a value
+    wins (e.g. a dumped old variable over the unset compose entry of its new name).
+    """
+    out: dict[tuple[str, str, str], Entry] = {}
+    for e in entries:
+        for name in renames.get(e.name, [e.name]):
+            new = dataclasses.replace(e, name=name, secret=e.secret or is_secret(name))
+            if new.key not in out or (out[new.key].value is None and new.value is not None):
+                out[new.key] = new
+    return list(out.values())
 
 
 # --------------------------------------------------------------------------- balena CLI
@@ -507,6 +597,65 @@ def write(cli: BalenaCli, config: Config, device: str | None, entries: list[Entr
             failures += 1
             print(f'  FAILED {c.entry.name}: {exc}', file=sys.stderr)
     return 1 if failures else 0
+
+
+def migrate(cli: BalenaCli, config: Config, device: str | None, renames: dict[str, list[str]],
+            assume_yes: bool, dry_run: bool) -> tuple[int, bool]:
+    """Set the new names of the renamed variables on balenaCloud, then remove the old ones.
+
+    Returns (exit code, whether the YAML entries should be renamed). Nothing is removed unless
+    every new variable of that old row is in place (set now, or already equal).
+    """
+    rows = cli.list_vars(device, config.fleet)
+    plan = plan_renames(rows, renames)
+    old_rows = {row_key(r.row): r.row for r in plan}
+    if not plan:
+        print('  No old variable names on balenaCloud; nothing to migrate.')
+        return 0, True
+    for r in plan:
+        old = row_key(r.row)
+        arrow = (f'{mask(r.entry.name, r.cloud_value)} (kept, differs from '
+                 f'{mask(old[0], r.value)})' if r.action == 'conflict'
+                 else mask(old[0], r.value))
+        print(f'  {r.action:<8} {old[0]:<34} -> {r.entry.name:<40} '
+              f'{scope(r.entry.level, r.entry.service):<30} {arrow}')
+    todo = [r for r in plan if r.action == 'add']
+    conflicts = [r for r in plan if r.action == 'conflict']
+    kept = {row_key(r.row) for r in conflicts}
+    print(f'  {len(todo)} to set, {len(plan) - len(todo) - len(conflicts)} already in place, '
+          f'{len(conflicts)} conflict(s), {len(old_rows) - len(kept)} old variable(s) to remove')
+    if conflicts:
+        print('  ! A conflict keeps the new variable as it is and the old one in place; '
+              'resolve it by hand (menu: Remove / Edit), then run migrate again.')
+    if dry_run:
+        return 0, False
+    print('  Each change restarts the containers that receive the variable.')
+    if todo and (assume_yes or confirm(f'Set {len(todo)} new variable(s) on balenaCloud?')):
+        failed: set[tuple[str, str, str]] = set()
+        for r in todo:
+            try:
+                cli.set_var(r.entry, r.value, device, config.fleet)
+                print(f'  set    {r.entry.name} ({scope(r.entry.level, r.entry.service)})')
+            except BalenaError as exc:
+                failed.add(row_key(r.row))
+                print(f'  FAILED {r.entry.name}: {exc}', file=sys.stderr)
+    elif todo:
+        print('  Nothing set; old variables kept.')
+        return 0, False
+    else:
+        failed = set()
+    blocked = failed | kept
+    removable = [row for key, row in old_rows.items() if key not in blocked]
+    if removable and (assume_yes or confirm(
+            f'Remove the {len(removable)} old variable(s) from balenaCloud?')):
+        for row in removable:
+            try:
+                cli.remove_var(row)
+                print(f'  removed {row["name"]} ({scope(*row_key(row)[1:])})')
+            except BalenaError as exc:
+                failed.add(row_key(row))
+                print(f'  FAILED removing {row["name"]}: {exc}', file=sys.stderr)
+    return (1 if failed else 0), True
 
 
 # --------------------------------------------------------------------------- interactive
@@ -666,6 +815,16 @@ class Menu:
             entry.value = None
             self.save()
 
+    def do_migrate(self) -> None:
+        renames = load_renames(DEFAULT_RENAMES)
+        _, rename_yaml = migrate(self.cli, self.config, self.target(), renames,
+                                 assume_yes=False, dry_run=False)
+        if rename_yaml:
+            fresh, self.services = load_compose(self.compose)
+            renamed = rename_entries(self.config.entries, renames)
+            self.config.entries = merge_entries(renamed, fresh)
+            self.save()
+
     def do_regenerate(self) -> None:
         fresh, self.services = load_compose(self.compose)
         self.config.entries = merge_entries(self.config.entries, fresh)
@@ -693,6 +852,7 @@ class Menu:
             ('Set a secret (straight to balenaCloud)', self.do_secret),
             ('Remove a balenaCloud variable', self.do_remove),
             ('Regenerate YAML from docker-compose.yml (keeps your values)', self.do_regenerate),
+            ('Migrate old variable names on balenaCloud (env_renames.yaml)', self.do_migrate),
             ('Change device / fleet', self.do_target),
         ]
         while True:
@@ -738,6 +898,12 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     write_parser = sub.add_parser('write', help='set the changed YAML entries on balenaCloud')
     write_parser.add_argument('--yes', action='store_true', help='do not ask for confirmation')
     write_parser.add_argument('--dry-run', action='store_true', help='only show the changes')
+    migrate_parser = sub.add_parser(
+        'migrate', help='rename old variable names on balenaCloud (set new, then remove old)')
+    migrate_parser.add_argument('--yes', action='store_true', help='do not ask for confirmation')
+    migrate_parser.add_argument('--dry-run', action='store_true', help='only show the plan')
+    migrate_parser.add_argument('--renames', type=Path, default=DEFAULT_RENAMES,
+                                help='old -> new names (YAML)')
     return parser.parse_args(argv)
 
 
@@ -781,6 +947,14 @@ def main(argv: list[str] | None = None, cli: BalenaCli | None = None) -> int:
             print_changes(*diff(config.entries, cli.list_vars(device, config.fleet)))
         elif command == 'write':
             return write(cli, config, device, config.entries, args.yes, args.dry_run)
+        elif command == 'migrate':
+            renames = load_renames(args.renames)
+            code, rename_yaml = migrate(cli, config, device, renames, args.yes, args.dry_run)
+            if rename_yaml and args.file.exists():
+                config.entries = merge_entries(rename_entries(config.entries, renames), fresh)
+                save_config(args.file, config)
+                print(f'Renamed the entries in {args.file}')
+            return code
         return 0
     except BalenaError as exc:
         print(f'error: {exc}', file=sys.stderr)

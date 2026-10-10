@@ -121,7 +121,8 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 # No ZENOH_ROUTER_CONFIG_URI: this container is a Zenoh session, not a router. The router
 # runs in rover-a1-zenoh-router and every service shares the host network namespace.
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
-# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes
+# (empty with ROVER_ZENOH_MODE_SENSORS=peer).
 RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 # ENV PATH above reaches `docker exec`, but sshd builds a fresh environment for login shells,
 # so without this `ros-mcp` is off PATH over SSH and Claude fails to spawn the MCP server.
@@ -141,8 +142,8 @@ RUN git clone https://github.com/RaduPotlog/rover_sensors.git src/rover_sensors 
     && git -C src/rover_sensors checkout ${ROVER_SENSORS_REF}
 
 # Perception nodes (AprilTag, YOLO detection, terrain slope, fmoc person tracking);
-# rover_sensors_bringup includes its launch file, which does nothing until ROVER_USE_CAMERA /
-# ROVER_USE_TERRAIN / ROVER_START_FOLLOW_ME is true. Pin with --build-arg ROVER_PERCEPTION_REF=<ref>.
+# rover_sensors_bringup includes its launch file, which does nothing until ROVER_SYSTEM_USE_CAMERA /
+# ROVER_SENSORS_TERRAIN / ROVER_SYSTEM_FOLLOW_ME_ENABLE is true. Pin with --build-arg ROVER_PERCEPTION_REF=<ref>.
 # TEMPORARY: feature/rover_follow_me (RealSense driver moved to rover_sensors, fmoc moved here);
 # set back to master once it is merged.
 ARG ROVER_PERCEPTION_REF=feature/rover_follow_me
@@ -173,7 +174,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # CPU ONNX Runtime for rover_perception_detection (not a rosdep key); ~15 MB, loaded only when
-# ROVER_CAMERA_DETECTION=true.
+# ROVER_SENSORS_CAMERA_DETECTION=true.
 RUN uv pip install --system --break-system-packages onnxruntime
 
 RUN source /opt/ros/${ROS_DISTRO}/setup.bash \

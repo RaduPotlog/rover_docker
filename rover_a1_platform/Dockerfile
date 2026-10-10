@@ -113,7 +113,8 @@ RUN apt-get update && apt-get install -y \
 # Source ROS 2 in bashrc
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
-# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes
+# (empty with ROVER_ZENOH_MODE_PLATFORM=peer).
 RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 RUN echo "export PATH=\"\$PATH:/root/.local/bin\"" >> /root/.bashrc
 

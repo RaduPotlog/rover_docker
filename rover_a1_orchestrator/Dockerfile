@@ -126,7 +126,8 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc
 # No ZENOH_ROUTER_CONFIG_URI: this container is a Zenoh session, not a router. The router
 # runs in rover-a1-zenoh-router and every service shares the host network namespace.
 RUN echo "export RMW_IMPLEMENTATION=rmw_zenoh_cpp" >> /root/.bashrc
-# ros2 CLI over SSH: the Zenoh client settings start.sh writes (empty with ROVER_ZENOH_MODE=peer).
+# ros2 CLI over SSH: the Zenoh client settings start.sh writes
+# (empty with ROVER_ZENOH_MODE_ORCH=peer).
 RUN echo '[ -r /tmp/rover_zenoh_cli.env ] && . /tmp/rover_zenoh_cli.env' >> /root/.bashrc
 # ENV PATH above reaches `docker exec`, but sshd builds a fresh environment for login shells,
 # so without this `ros-mcp` is off PATH over SSH and Claude fails to spawn the MCP server.
@@ -138,7 +139,7 @@ RUN mkdir -p ~/ros2_ws/rover_a1
 WORKDIR /root/ros2_ws/rover_a1
 
 # map_autosaver writes <map_directory>.yaml/.pgm here while slam_toolbox is running, and
-# localization_source:=amcl reads the result back via ROVER_NAV_MAP. nav2's map_saver does
+# localization_source:=amcl reads the result back via ROVER_ORCH_NAV_MAP. nav2's map_saver does
 # not create parent directories, so the directory has to exist in the image. Mount a named
 # volume over it (docker-compose.yml) or the map dies with the container.
 RUN mkdir -p /maps

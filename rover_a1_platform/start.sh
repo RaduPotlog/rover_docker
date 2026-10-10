@@ -18,33 +18,34 @@ set -x  # Debug logging for Balena
 # All long-running processes we supervise. Populated as each is started.
 CHILD_PIDS=()
 
-# Toggle whether the rover_bringup launch is started at all. Set ROVER_START_ROS_PLATFORM as a
+# Toggle whether the rover_bringup launch is started at all. Set ROVER_PLATFORM_ENABLE as a
 # balenaCloud device/fleet variable (true/false); unset or empty means true. Changing the
 # variable makes the balena supervisor restart this container, which re-reads it here.
-case "${ROVER_START_ROS_PLATFORM:-true}" in
-  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_START_ROS_PLATFORM=true ;;
-  *) ROVER_START_ROS_PLATFORM=false ;;
+case "${ROVER_PLATFORM_ENABLE:-true}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_PLATFORM_ENABLE=true ;;
+  *) ROVER_PLATFORM_ENABLE=false ;;
 esac
 
-# Localization mode for rover_bringup (read there through the ROVER_USE_GPS environment variable).
-# Normalized like ROVER_START_ROS_PLATFORM so the launch files only ever see true/false;
+# Localization mode for rover_bringup (read there through the ROVER_SYSTEM_USE_GPS environment
+# variable).
+# Normalized like ROVER_PLATFORM_ENABLE so the launch files only ever see true/false;
 # unset or empty means false (wheels + IMU), true adds the RUTX11 GPS (dual EKF). The same
 # variable starts the GPS driver in rover-a1-sensors.
-case "${ROVER_USE_GPS:-false}" in
-  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_USE_GPS=true ;;
-  *) ROVER_USE_GPS=false ;;
+case "${ROVER_SYSTEM_USE_GPS:-false}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_SYSTEM_USE_GPS=true ;;
+  *) ROVER_SYSTEM_USE_GPS=false ;;
 esac
-export ROVER_USE_GPS
+export ROVER_SYSTEM_USE_GPS
 
 # Whether the GPS global EKF (rover_ekf_global_node) broadcasts map -> odom; read by
 # rover_localization's publish_global_tf default. Unset or empty means false: SLAM or AMCL owns
 # map -> odom while GPS is still fused (odometry/global keeps publishing). Set it true to let the
 # global EKF publish map -> odom itself.
-case "${ROVER_GPS_PUBLISH_MAP_TF:-false}" in
-  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_GPS_PUBLISH_MAP_TF=true ;;
-  *) ROVER_GPS_PUBLISH_MAP_TF=false ;;
+case "${ROVER_PLATFORM_GPS_MAP_TF:-false}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_PLATFORM_GPS_MAP_TF=true ;;
+  *) ROVER_PLATFORM_GPS_MAP_TF=false ;;
 esac
-export ROVER_GPS_PUBLISH_MAP_TF
+export ROVER_PLATFORM_GPS_MAP_TF
 
 # Process groups of the `ros2 launch` jobs (each launch's PID: they run as jobs, see set -m below).
 LAUNCH_PGIDS=()
@@ -95,12 +96,12 @@ trap 'terminate_children; exit 0' TERM INT
 # stayed up (about 13 MB/day idle, far more if a fault spams) and was overwritten when it restarted,
 # which also destroyed the log of whatever crashed it; ~/.ros/log gained an entry for every
 # process start and every `ros2` CLI call, forever.
-#   ROVER_LOG_MAX_MB          size at which a log is rotated (default 20)
-#   ROVER_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
-#   ROVER_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
-#   ROVER_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
-ROVER_LOG_MAX_BYTES=$(( ${ROVER_LOG_MAX_MB:-20} * 1024 * 1024 ))
-ROVER_LOG_BACKUP_COUNT=${ROVER_LOG_BACKUPS:-3}
+#   ROVER_SYSTEM_LOG_MAX_MB          size at which a log is rotated (default 20)
+#   ROVER_SYSTEM_LOG_BACKUPS         rotated copies kept per log, FILE.1 .. FILE.N (default 3)
+#   ROVER_SYSTEM_ROS_LOG_KEEP_DAYS   age after which ~/.ros/log entries are deleted (default 7)
+#   ROVER_SYSTEM_ROS_LOG_MAX_MB      size ~/.ros/log is trimmed to, oldest first (default 300)
+ROVER_LOG_MAX_BYTES=$(( ${ROVER_SYSTEM_LOG_MAX_MB:-20} * 1024 * 1024 ))
+ROVER_LOG_BACKUP_COUNT=${ROVER_SYSTEM_LOG_BACKUPS:-3}
 
 # Copies stdin to FILE and keeps it below MAX_BYTES: when the next line would not fit, FILE becomes
 # FILE.1, FILE.1 becomes FILE.2 ... and the oldest of BACKUPS copies is dropped. A FILE left over
@@ -167,14 +168,15 @@ rotating_log() {
   exec python3 -u -c "$ROVER_ROTATING_LOG_PY" "$@"
 }
 
-# Delete ros logs older than ROVER_ROS_LOG_KEEP_DAYS, then the oldest ones until the directory is
-# below ROVER_ROS_LOG_MAX_MB. Called before anything is launched, so no live log is touched.
+# Delete ros logs older than ROVER_SYSTEM_ROS_LOG_KEEP_DAYS, then the oldest ones until the
+# directory is below ROVER_SYSTEM_ROS_LOG_MAX_MB. Called before anything is launched, so no live
+# log is touched.
 prune_ros_logs() {
   local - dir days max_mb entry
   set +x  # the size loop would flood the container log
   dir=${ROS_LOG_DIR:-${ROS_HOME:-$HOME/.ros}/log}
-  days=${ROVER_ROS_LOG_KEEP_DAYS:-7}
-  max_mb=${ROVER_ROS_LOG_MAX_MB:-300}
+  days=${ROVER_SYSTEM_ROS_LOG_KEEP_DAYS:-7}
+  max_mb=${ROVER_SYSTEM_ROS_LOG_MAX_MB:-300}
   [ -d "$dir" ] || return 0
   find "$dir" -mindepth 1 -maxdepth 1 -mtime +"$days" -exec rm -rf {} + 2>/dev/null || true
   while [ "$(du -sm "$dir" 2>/dev/null | cut -f1)" -gt "$max_mb" ] 2>/dev/null; do
@@ -202,8 +204,8 @@ mkdir -p /config/rover_crsf_teleop
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 source /root/ros2_ws/rover_a1/install/setup.bash
 
-# **Zenoh session mode** for every ROS process this container starts (ROVER_ZENOH_MODE; unset or
-# empty means peer).
+# **Zenoh session mode** for every ROS process this container starts
+# (ROVER_ZENOH_MODE_PLATFORM; unset or empty means peer).
 #   peer: rmw_zenoh's default - each process also links directly to the other peers. The
 #     platform runs this way, so its own traffic (imu -> EKF, cmd_vel -> twist_mux ->
 #     ros2_control, safety) never waits on the router.
@@ -218,20 +220,20 @@ source /root/ros2_ws/rover_a1/install/setup.bash
 #   do both by default.
 # The ros2 CLI in an SSH shell is always a client with a 5 s timeout (.bashrc sources
 # /tmp/rover_zenoh_cli.env): it fails fast while the router is down and stays out of the mesh.
-case "${ROVER_ZENOH_MODE:-peer}" in
-  [Pp][Ee][Ee][Rr]) ROVER_ZENOH_MODE=peer ;;
-  [Cc][Ll][Ii][Ee][Nn][Tt]) ROVER_ZENOH_MODE=client ;;
-  *) ROVER_ZENOH_MODE=peer ;;
+case "${ROVER_ZENOH_MODE_PLATFORM:-peer}" in
+  [Pp][Ee][Ee][Rr]) ZENOH_MODE=peer ;;
+  [Cc][Ll][Ii][Ee][Nn][Tt]) ZENOH_MODE=client ;;
+  *) ZENOH_MODE=peer ;;
 esac
 ZENOH_ROUTER_ENDPOINT="tcp/127.0.0.1:7447"
 ZENOH_CLIENT_BASE="mode=\"client\";connect/endpoints=[\"${ZENOH_ROUTER_ENDPOINT}\"];listen/endpoints=[]"
-if [ "$ROVER_ZENOH_MODE" = client ]; then
+if [ "$ZENOH_MODE" = client ]; then
   export ZENOH_CONFIG_OVERRIDE="${ZENOH_CLIENT_BASE};connect/timeout_ms=-1;connect/retry={period_init_ms:500,period_max_ms:2000,period_increase_factor:2}"
 else
   unset ZENOH_CONFIG_OVERRIDE
 fi
 printf "export ZENOH_CONFIG_OVERRIDE='%s'\n" "${ZENOH_CLIENT_BASE};connect/timeout_ms=5000" > /tmp/rover_zenoh_cli.env
-echo "Zenoh session mode: $ROVER_ZENOH_MODE"
+echo "Zenoh session mode: $ZENOH_MODE (ROVER_ZENOH_MODE_PLATFORM)"
 
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 
@@ -258,7 +260,7 @@ fi
 # (rover_modbus, rover_cppuprofile). Prepending it made it shadow the ROS libs the
 # workspace was compiled against, since LD_LIBRARY_PATH beats their RUNPATH.
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
+if [ "$ROVER_PLATFORM_ENABLE" = true ]; then
   set -m  # own process group, so stop_launch_groups can signal its nodes
   # `> >(...)` rather than a pipe: $! must stay the PID (and process group) of `ros2 launch` itself,
   # which stop_launch_groups and `wait -n` below depend on.
@@ -268,9 +270,9 @@ if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
   set +m
   LAUNCH_PGIDS+=("$ROVER_PID")
   CHILD_PIDS+=("$ROVER_PID")
-  echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_USE_GPS=$ROVER_USE_GPS, ROVER_GPS_PUBLISH_MAP_TF=$ROVER_GPS_PUBLISH_MAP_TF)"
+  echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_SYSTEM_USE_GPS=$ROVER_SYSTEM_USE_GPS, ROVER_PLATFORM_GPS_MAP_TF=$ROVER_PLATFORM_GPS_MAP_TF)"
 else
-  echo "Rover bringup disabled (ROVER_START_ROS_PLATFORM=false); skipping"
+  echo "Rover bringup disabled (ROVER_PLATFORM_ENABLE=false); skipping"
 fi
 
 # Optional short delay to let rover nodes initialize before the bridges connect
@@ -306,7 +308,7 @@ EXIT_CODE=0
 wait -n "${CHILD_PIDS[@]}" || EXIT_CODE=$?
 
 STATUS_ENTRIES=("sshd:$SSHD_PID" "web_bridges:$BRIDGES_PID")
-if [ "$ROVER_START_ROS_PLATFORM" = true ]; then
+if [ "$ROVER_PLATFORM_ENABLE" = true ]; then
   STATUS_ENTRIES+=("rover_bringup:$ROVER_PID")
 fi
 

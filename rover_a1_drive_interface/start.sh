@@ -59,20 +59,20 @@ idle() {
   exit 0
 }
 
-if [ "$(norm_bool "${ROVER_DRIVE_ENABLE:-}" true)" != true ]; then
-  idle "Drive interface disabled (ROVER_DRIVE_ENABLE=false)"
+if [ "$(norm_bool "${ROVER_UI_ENABLE:-}" true)" != true ]; then
+  idle "Drive interface disabled (ROVER_UI_ENABLE=false)"
 fi
 
-export ROVER_DRIVE_PORT="${ROVER_DRIVE_PORT:-5000}"
-export ROVER_DRIVE_BRIDGE="${ROVER_DRIVE_BRIDGE:-127.0.0.1:8765}"
-ROVER_DRIVE_USER="${ROVER_DRIVE_USER:-rover}"
+export ROVER_UI_PORT="${ROVER_UI_PORT:-5000}"
+export ROVER_UI_BRIDGE="${ROVER_UI_BRIDGE:-127.0.0.1:8765}"
+ROVER_UI_USER="${ROVER_UI_USER:-rover}"
 
 # foxglove_bridge can drive the rover and trip the e-stop; never serve it without a login.
-if [ -z "${ROVER_DRIVE_PASSWORD:-}" ]; then
-  echo "ERROR: ROVER_DRIVE_PASSWORD is not set - refusing to expose the drive interface without a login" >&2
+if [ -z "${ROVER_UI_PASSWORD:-}" ]; then
+  echo "ERROR: ROVER_UI_PASSWORD is not set - refusing to expose the drive interface without a login" >&2
   idle "Drive interface not served"
 fi
-htpasswd -bcB /etc/nginx/drive.htpasswd "$ROVER_DRIVE_USER" "$ROVER_DRIVE_PASSWORD" >/dev/null
+htpasswd -bcB /etc/nginx/drive.htpasswd "$ROVER_UI_USER" "$ROVER_UI_PASSWORD" >/dev/null
 
 # JSON-escape the few strings that go into config.json.
 json_str() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
@@ -80,27 +80,27 @@ num_or() { [[ "$1" =~ ^[0-9]+([.][0-9]+)?$ ]] && echo "$1" || echo "$2"; }
 
 cat > /tmp/drive-config.json <<JSON
 {
-  "namespace": "$(json_str "${ROVER_NAMESPACE:-}")",
-  "robotName": "$(json_str "${ROVER_DRIVE_ROBOT_NAME:-${ROVER_NAMESPACE:-rover}}")",
-  "maxLinear": $(num_or "${ROVER_DRIVE_MAX_LINEAR:-}" 1.0),
-  "maxAngular": $(num_or "${ROVER_DRIVE_MAX_ANGULAR:-}" 1.0),
-  "maxRimSpeed": $(num_or "${ROVER_DRIVE_MAX_RIM_SPEED:-}" 1.7),
-  "trackWidth": $(num_or "${ROVER_DRIVE_TRACK_WIDTH:-}" 1.0204),
-  "expoLinear": $(num_or "${ROVER_DRIVE_EXPO_LINEAR:-}" 0.3),
-  "expoAngular": $(num_or "${ROVER_DRIVE_EXPO_ANGULAR:-}" 0.5),
-  "auxOutputNames": "$(json_str "${ROVER_DRIVE_AUX_OUTPUT_NAMES:-}")",
-  "auxInputNames": "$(json_str "${ROVER_DRIVE_AUX_INPUT_NAMES:-}")"
+  "namespace": "$(json_str "${ROVER_SYSTEM_NAMESPACE:-}")",
+  "robotName": "$(json_str "${ROVER_UI_ROBOT_NAME:-${ROVER_SYSTEM_NAMESPACE:-rover}}")",
+  "maxLinear": $(num_or "${ROVER_UI_MAX_LINEAR:-}" 1.0),
+  "maxAngular": $(num_or "${ROVER_UI_MAX_ANGULAR:-}" 1.0),
+  "maxRimSpeed": $(num_or "${ROVER_UI_MAX_RIM_SPEED:-}" 1.7),
+  "trackWidth": $(num_or "${ROVER_UI_TRACK_WIDTH:-}" 1.0204),
+  "expoLinear": $(num_or "${ROVER_UI_EXPO_LINEAR:-}" 0.3),
+  "expoAngular": $(num_or "${ROVER_UI_EXPO_ANGULAR:-}" 0.5),
+  "auxOutputNames": "$(json_str "${ROVER_UI_AUX_OUTPUT_NAMES:-}")",
+  "auxInputNames": "$(json_str "${ROVER_UI_AUX_INPUT_NAMES:-}")"
 }
 JSON
 
-envsubst '${ROVER_DRIVE_PORT} ${ROVER_DRIVE_BRIDGE}' \
+envsubst '${ROVER_UI_PORT} ${ROVER_UI_BRIDGE}' \
   < /etc/nginx/drive.conf.template > /tmp/nginx.conf
 nginx -t -c /tmp/nginx.conf
 
 nginx -c /tmp/nginx.conf -g 'daemon off;' &
 NGINX_PID=$!
 CHILD_PIDS+=("$NGINX_PID")
-echo "Drive interface on :${ROVER_DRIVE_PORT} (user ${ROVER_DRIVE_USER}), bridge ${ROVER_DRIVE_BRIDGE} (PID: $NGINX_PID)"
+echo "Drive interface on :${ROVER_UI_PORT} (user ${ROVER_UI_USER}), bridge ${ROVER_UI_BRIDGE} (PID: $NGINX_PID)"
 
 # **Supervise** - block until the first supervised process exits, then tear down the other and
 # exit so `restart: always` brings the whole container back. `|| EXIT_CODE=$?` because this
