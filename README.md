@@ -488,6 +488,27 @@ an all-services variable, or set `ROVER_START_NAVIGATION=false` alongside it.
 With the defaults only `rover-a1-platform` runs its stack; the orchestrator and the sensor
 payload idle until `ROVER_START_NAVIGATION` / `ROVER_START_SENSORS` are set to `true`.
 
+### Managing variables with `tools/balena_env.py`
+
+`tools/balena_env.yaml` lists every variable `docker-compose.yml` declares, one line per
+(name, level, service), with `value` (what to set; `null` = not managed, the compose default
+applies) next to the compose `default`. `tools/balena_env.py` keeps it in step with balenaCloud
+through the balena CLI (installed and `balena login`; Python 3 with PyYAML):
+
+```bash
+tools/balena_env.py                    # interactive menu: show, dump, diff, write, edit, set a secret, remove
+tools/balena_env.py dump               # balenaCloud -> YAML
+tools/balena_env.py diff               # YAML vs balenaCloud
+tools/balena_env.py write --dry-run    # what a write would set; drop --dry-run to set it (asks first)
+tools/balena_env.py init               # after editing docker-compose.yml; keeps your values
+```
+
+`device: null` in the YAML means the fleet's only device; `--device`/`--fleet` override it.
+A write sets only entries whose value differs from balenaCloud and never removes anything, so
+expect the restarts described above. Passwords are never stored in the file: set them with
+**Set a secret** in the menu, which hands the value to the CLI through its environment, not its
+command line. Tests: `python3 -m pytest tools/test_balena_env.py`.
+
 ## Where the orchestrator runs
 
 `rover-a1-orchestrator` holds the autonomy stack from
