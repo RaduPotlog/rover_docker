@@ -330,9 +330,17 @@ def test_renames_file_is_complete_and_targets_the_schema():
     assert RENAMES['ROVER_DRIVE_PORT'] == ['ROVER_UI_PORT']
     assert len(RENAMES['ROVER_ZENOH_MODE']) == 4
     new = [n for names in RENAMES.values() for n in names]
-    assert len(new) == len(set(new))
+    # One target per old name, except a follow-up rename: ROVER_SYSTEM_GPS_MAP_TF takes both
+    # the 2026-10-10 name and the old one it replaced (ROVER_PLATFORM_GPS_MAP_TF).
+    assert {n for n in new if new.count(n) > 1} == {'ROVER_SYSTEM_GPS_MAP_TF'}
     assert all(be.group_of(n) != 'Other' for n in new)
     assert not set(RENAMES) & set(new)
+
+
+def test_plan_follows_the_gps_map_tf_follow_up_rename():
+    rows = [row('ROVER_PLATFORM_GPS_MAP_TF', 'true', id_=1)]
+    assert plan_of(rows) == {
+        ('ROVER_PLATFORM_GPS_MAP_TF', ('ROVER_SYSTEM_GPS_MAP_TF', 'device', '*'), 'true', 'add')}
 
 
 def test_plan_keeps_value_level_and_service():

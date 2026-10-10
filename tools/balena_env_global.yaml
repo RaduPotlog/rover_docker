@@ -7,7 +7,7 @@ variables:
   - {name: ROVER_SYSTEM_USE_GPS, value: 'true', default: 'false', level: device, service: '*'}
   - {name: ROVER_SYSTEM_USE_LIDAR, value: 'true', default: 'false', level: device, service: '*'}
   - {name: ROVER_SYSTEM_USE_CAMERA, value: 'false', default: 'false', level: device, service: '*'}
-  - {name: ROVER_PLATFORM_GPS_MAP_TF, value: 'false', default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_GPS_MAP_TF, value: 'false', default: 'false', level: device, service: '*'}
   # --- Sensor mount poses (all services) ---
   - {name: ROVER_SYSTEM_MOUNT_IMU_X, value: null, default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_IMU_Y, value: null, default: null, level: device, service: '*'}

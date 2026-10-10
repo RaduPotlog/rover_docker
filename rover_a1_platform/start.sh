@@ -41,11 +41,11 @@ export ROVER_SYSTEM_USE_GPS
 # rover_localization's publish_global_tf default. Unset or empty means false: SLAM or AMCL owns
 # map -> odom while GPS is still fused (odometry/global keeps publishing). Set it true to let the
 # global EKF publish map -> odom itself.
-case "${ROVER_PLATFORM_GPS_MAP_TF:-false}" in
-  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_PLATFORM_GPS_MAP_TF=true ;;
-  *) ROVER_PLATFORM_GPS_MAP_TF=false ;;
+case "${ROVER_SYSTEM_GPS_MAP_TF:-false}" in
+  [Tt][Rr][Uu][Ee]|1|[Yy][Ee][Ss]|[Oo][Nn]) ROVER_SYSTEM_GPS_MAP_TF=true ;;
+  *) ROVER_SYSTEM_GPS_MAP_TF=false ;;
 esac
-export ROVER_PLATFORM_GPS_MAP_TF
+export ROVER_SYSTEM_GPS_MAP_TF
 
 # Process groups of the `ros2 launch` jobs (each launch's PID: they run as jobs, see set -m below).
 LAUNCH_PGIDS=()
@@ -270,7 +270,7 @@ if [ "$ROVER_PLATFORM_ENABLE" = true ]; then
   set +m
   LAUNCH_PGIDS+=("$ROVER_PID")
   CHILD_PIDS+=("$ROVER_PID")
-  echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_SYSTEM_USE_GPS=$ROVER_SYSTEM_USE_GPS, ROVER_PLATFORM_GPS_MAP_TF=$ROVER_PLATFORM_GPS_MAP_TF)"
+  echo "Rover bringup started in background (PID: $ROVER_PID, ROVER_SYSTEM_USE_GPS=$ROVER_SYSTEM_USE_GPS, ROVER_SYSTEM_GPS_MAP_TF=$ROVER_SYSTEM_GPS_MAP_TF)"
 else
   echo "Rover bringup disabled (ROVER_PLATFORM_ENABLE=false); skipping"
 fi

@@ -230,7 +230,7 @@ case "${ROVER_ORCH_DRIVE_DEFAULT_MODE:-assisted}" in
     ;;
 esac
 ROVER_SYSTEM_USE_GPS=$(norm_bool "${ROVER_SYSTEM_USE_GPS:-}" false)
-ROVER_PLATFORM_GPS_MAP_TF=$(norm_bool "${ROVER_PLATFORM_GPS_MAP_TF:-}" false)
+ROVER_SYSTEM_GPS_MAP_TF=$(norm_bool "${ROVER_SYSTEM_GPS_MAP_TF:-}" false)
 ROVER_SYSTEM_USE_LIDAR=$(norm_bool "${ROVER_SYSTEM_USE_LIDAR:-}" false)
 # Adds the RealSense depth cloud to the local costmap (bringup.launch.py use_camera).
 ROVER_ORCH_NAV_USE_CAMERA=$(norm_bool "${ROVER_ORCH_NAV_USE_CAMERA:-}" false)
@@ -345,11 +345,11 @@ fi
 
 # Nav 2's global frame owner. ROVER_SYSTEM_USE_GPS decides it by default - 'gps' means
 # rover_ekf_global_node (rover-a1-platform) publishes map -> odom (needs
-# ROVER_PLATFORM_GPS_MAP_TF=true), 'odom' means nobody does and navigation is odometry-relative.
+# ROVER_SYSTEM_GPS_MAP_TF=true), 'odom' means nobody does and navigation is odometry-relative.
 # ROVER_ORCH_LOCALIZATION_SOURCE overrides that, and is the only way to reach 'slam'
 # (slam_toolbox), 'amcl' (nav2_amcl on ROVER_ORCH_NAV_MAP) or 'indoor' (rover_indoor_nav_manager switches between
 # the two at runtime from the drive UI, maps in /maps) - all require ROVER_SYSTEM_USE_GPS=false or
-# ROVER_PLATFORM_GPS_MAP_TF=false. Deliberately not auto-selected: flipping an existing
+# ROVER_SYSTEM_GPS_MAP_TF=false. Deliberately not auto-selected: flipping an existing
 # odom-mode rover into amcl would hard-fail it, since amcl needs a map that odom never had.
 if [ "$ROVER_SYSTEM_USE_GPS" = true ]; then
   LOCALIZATION_SOURCE=gps
@@ -366,11 +366,11 @@ if [ -n "${ROVER_ORCH_LOCALIZATION_SOURCE:-}" ]; then
       ;;
   esac
 fi
-# Exactly one process may publish map -> odom. With ROVER_PLATFORM_GPS_MAP_TF=false the GPS
+# Exactly one process may publish map -> odom. With ROVER_SYSTEM_GPS_MAP_TF=false the GPS
 # global EKF still fuses but leaves map -> odom to slam_toolbox or AMCL.
 if { [ "$LOCALIZATION_SOURCE" = slam ] || [ "$LOCALIZATION_SOURCE" = amcl ] || [ "$LOCALIZATION_SOURCE" = indoor ]; } \
-   && [ "$ROVER_SYSTEM_USE_GPS" = true ] && [ "$ROVER_PLATFORM_GPS_MAP_TF" = true ]; then
-  echo "WARNING: localization_source=${LOCALIZATION_SOURCE} with ROVER_SYSTEM_USE_GPS=true - ${LOCALIZATION_SOURCE} and rover_ekf_global_node would both publish map -> odom (set ROVER_PLATFORM_GPS_MAP_TF=false)"
+   && [ "$ROVER_SYSTEM_USE_GPS" = true ] && [ "$ROVER_SYSTEM_GPS_MAP_TF" = true ]; then
+  echo "WARNING: localization_source=${LOCALIZATION_SOURCE} with ROVER_SYSTEM_USE_GPS=true - ${LOCALIZATION_SOURCE} and rover_ekf_global_node would both publish map -> odom (set ROVER_SYSTEM_GPS_MAP_TF=false)"
 fi
 # AMCL matches the lidar scan against the static map; without a scan it never localizes and
 # never publishes map -> odom, so Nav 2 cannot resolve its global frame at all. This is more
@@ -378,8 +378,8 @@ fi
 if { [ "$LOCALIZATION_SOURCE" = amcl ] || [ "$LOCALIZATION_SOURCE" = indoor ]; } && [ "$ROVER_SYSTEM_USE_LIDAR" != true ]; then
   echo "WARNING: localization_source=amcl with ROVER_SYSTEM_USE_LIDAR=false - AMCL has no scan to match, will never localize, and nothing will publish map -> odom"
 fi
-if [ "$LOCALIZATION_SOURCE" = gps ] && [ "$ROVER_PLATFORM_GPS_MAP_TF" != true ]; then
-  echo "WARNING: localization_source=gps with ROVER_PLATFORM_GPS_MAP_TF=false - nothing publishes map -> odom, so Nav 2 cannot resolve its global frame"
+if [ "$LOCALIZATION_SOURCE" = gps ] && [ "$ROVER_SYSTEM_GPS_MAP_TF" != true ]; then
+  echo "WARNING: localization_source=gps with ROVER_SYSTEM_GPS_MAP_TF=false - nothing publishes map -> odom, so Nav 2 cannot resolve its global frame"
 fi
 
 # Both Nav 2 costmaps mark and clear from <namespace>/scan, and the navigation trees stop
