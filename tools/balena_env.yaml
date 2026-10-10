@@ -55,15 +55,15 @@ variables:
   - {name: ROVER_ORCH_AMCL_INITIAL_POSE_YAW, value: '0.0', default: null, level: device, service: '*'}
   # --- Sensors ---
   - {name: ROVER_SENSORS_ENABLE, value: 'true', default: 'false', level: device, service: rover-a1-sensors}
-  - {name: ROVER_SENSORS_CAMERA_FPS, value: null, default: '15', level: device, service: rover-a1-sensors}
-  - {name: ROVER_SENSORS_CAMERA_DEPTH_PROFILE, value: null, default: 424x240, level: device, service: rover-a1-sensors}
-  - {name: ROVER_SENSORS_CAMERA_DEPTH_CLOUD, value: 'true', default: 'true', level: device, service: rover-a1-sensors}
+  - {name: ROVER_SENSORS_CAMERA_FPS, value: '15', default: '15', level: device, service: rover-a1-sensors}
+  - {name: ROVER_SENSORS_CAMERA_DEPTH_PROFILE, value: 424x240, default: 424x240, level: device, service: rover-a1-sensors}
+  - {name: ROVER_SENSORS_CAMERA_DEPTH_CLOUD, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_FIDUCIALS, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
-  - {name: ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE, value: null, default: '2.0', level: device, service: rover-a1-sensors}
+  - {name: ROVER_SENSORS_CAMERA_FIDUCIALS_DECIMATE, value: '2.0', default: '2.0', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_DETECTION, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_DETECTION_MODEL, value: null, default: null, level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_CAMERA_DETECTION_GPU, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
-  - {name: ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE, value: null, default: '10.0', level: device, service: rover-a1-sensors}
+  - {name: ROVER_SENSORS_CAMERA_DETECTION_MAX_RATE, value: '3.0', default: '3.0', level: device, service: rover-a1-sensors}
   - {name: ROVER_SENSORS_TERRAIN, value: 'false', default: 'false', level: device, service: rover-a1-sensors}
   # --- Drive interface ---
   - {name: ROVER_UI_ENABLE, value: 'true', default: 'true', level: device, service: '*'}

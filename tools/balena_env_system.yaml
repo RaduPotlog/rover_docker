@@ -6,7 +6,7 @@ variables:
   - {name: ROVER_SYSTEM_NAMESPACE, value: rover, default: rover, level: device, service: '*'}
   - {name: ROVER_SYSTEM_USE_GPS, value: 'true', default: 'false', level: device, service: '*'}
   - {name: ROVER_SYSTEM_USE_LIDAR, value: 'true', default: 'false', level: device, service: '*'}
-  - {name: ROVER_SYSTEM_USE_CAMERA, value: 'false', default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_USE_CAMERA, value: 'true', default: 'false', level: device, service: '*'}
   - {name: ROVER_SYSTEM_GPS_MAP_TF, value: 'false', default: 'false', level: device, service: '*'}
   # --- Sensor mount poses (all services) ---
   - {name: ROVER_SYSTEM_MOUNT_IMU_X, value: '-0.09', default: null, level: device, service: '*'}
@@ -27,10 +27,10 @@ variables:
   - {name: ROVER_SYSTEM_MOUNT_LIDAR_ROLL, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_LIDAR_PITCH, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_LIDAR_YAW, value: '0', default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_X, value: '0.0', default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_X, value: '0.25', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_Y, value: '0.0', default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_MOUNT_CAMERA_Z, value: '0.0', default: null, level: device, service: '*'}
+  - {name: ROVER_SYSTEM_MOUNT_CAMERA_Z, value: '0.2', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_ROLL, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_PITCH, value: '0', default: null, level: device, service: '*'}
   - {name: ROVER_SYSTEM_MOUNT_CAMERA_YAW, value: '0', default: null, level: device, service: '*'}
-  - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: null, default: 'false', level: device, service: '*'}
+  - {name: ROVER_SYSTEM_FOLLOW_ME_ENABLE, value: 'false', default: 'false', level: device, service: '*'}

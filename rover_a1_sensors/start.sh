@@ -221,6 +221,12 @@ ROVER_SYSTEM_USE_CAMERA=$(norm_bool "${ROVER_SYSTEM_USE_CAMERA:-}" false)
 # the environment. The follow_me node itself runs in rover-a1-orchestrator.
 ROVER_SYSTEM_FOLLOW_ME_ENABLE=$(norm_bool "${ROVER_SYSTEM_FOLLOW_ME_ENABLE:-}" false)
 export ROVER_SYSTEM_FOLLOW_ME_ENABLE
+# The person tracker only sees camera/depth/points, which rover_realsense publishes only with
+# ROVER_SENSORS_CAMERA_DEPTH_CLOUD (off by default). The launch reads the variable itself.
+if [ "$ROVER_SYSTEM_FOLLOW_ME_ENABLE" = true ] && [ "$ROVER_SYSTEM_USE_CAMERA" = true ] \
+    && [ "$(norm_bool "${ROVER_SENSORS_CAMERA_DEPTH_CLOUD:-}" false)" != true ]; then
+  echo "WARNING: ROVER_SYSTEM_FOLLOW_ME_ENABLE=true with ROVER_SENSORS_CAMERA_DEPTH_CLOUD=false - no camera/depth/points for the person tracker, so no person is ever tracked"
+fi
 
 # With no driver selected the launch has nothing to run and exits at once, so that case is
 # treated as disabled too.
